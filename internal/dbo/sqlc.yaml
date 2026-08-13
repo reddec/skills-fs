@@ -1,0 +1,13 @@
+version: "2"
+sql:
+  - engine: "sqlite"
+    queries: "queries"
+    schema: "migrations"
+    gen:
+      go:
+        package: "dbo"
+        out: "."
+        query_parameter_limit: 1
+        emit_empty_slices: true
+        emit_json_tags: true
+        emit_pointers_for_null_types: true
