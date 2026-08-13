@@ -287,6 +287,75 @@ func (s *NilDateTime) UnmarshalJSON(data []byte) error {
 	return s.Decode(d, json.DecodeDateTime)
 }
 
+// Encode encodes Metadata as json.
+func (o OptMetadata) Encode(e *jx.Encoder) {
+	if !o.Set {
+		return
+	}
+	o.Value.Encode(e)
+}
+
+// Decode decodes Metadata from json.
+func (o *OptMetadata) Decode(d *jx.Decoder) error {
+	if o == nil {
+		return errors.New("invalid: unable to decode OptMetadata to nil")
+	}
+	o.Set = true
+	o.Value = make(Metadata)
+	if err := o.Value.Decode(d); err != nil {
+		return err
+	}
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s OptMetadata) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *OptMetadata) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
+// Encode encodes string as json.
+func (o OptString) Encode(e *jx.Encoder) {
+	if !o.Set {
+		return
+	}
+	e.Str(string(o.Value))
+}
+
+// Decode decodes string from json.
+func (o *OptString) Decode(d *jx.Decoder) error {
+	if o == nil {
+		return errors.New("invalid: unable to decode OptString to nil")
+	}
+	o.Set = true
+	v, err := d.Str()
+	if err != nil {
+		return err
+	}
+	o.Value = string(v)
+	return nil
+}
+
+// MarshalJSON implements stdjson.Marshaler.
+func (s OptString) MarshalJSON() ([]byte, error) {
+	e := jx.Encoder{}
+	s.Encode(&e)
+	return e.Bytes(), nil
+}
+
+// UnmarshalJSON implements stdjson.Unmarshaler.
+func (s *OptString) UnmarshalJSON(data []byte) error {
+	d := jx.DecodeBytes(data)
+	return s.Decode(d)
+}
+
 // Encode implements json.Marshaler.
 func (s *Skill) Encode(e *jx.Encoder) {
 	e.ObjStart()
@@ -788,20 +857,28 @@ func (s *SkillWrite) encodeFields(e *jx.Encoder) {
 		e.Str(s.Body)
 	}
 	{
-		e.FieldStart("license")
-		e.Str(s.License)
+		if s.License.Set {
+			e.FieldStart("license")
+			s.License.Encode(e)
+		}
 	}
 	{
-		e.FieldStart("compatibility")
-		e.Str(s.Compatibility)
+		if s.Compatibility.Set {
+			e.FieldStart("compatibility")
+			s.Compatibility.Encode(e)
+		}
 	}
 	{
-		e.FieldStart("allowedTools")
-		e.Str(s.AllowedTools)
+		if s.AllowedTools.Set {
+			e.FieldStart("allowedTools")
+			s.AllowedTools.Encode(e)
+		}
 	}
 	{
-		e.FieldStart("metadata")
-		s.Metadata.Encode(e)
+		if s.Metadata.Set {
+			e.FieldStart("metadata")
+			s.Metadata.Encode(e)
+		}
 	}
 }
 
@@ -861,11 +938,9 @@ func (s *SkillWrite) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"body\"")
 			}
 		case "license":
-			requiredBitSet[0] |= 1 << 3
 			if err := func() error {
-				v, err := d.Str()
-				s.License = string(v)
-				if err != nil {
+				s.License.Reset()
+				if err := s.License.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -873,11 +948,9 @@ func (s *SkillWrite) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"license\"")
 			}
 		case "compatibility":
-			requiredBitSet[0] |= 1 << 4
 			if err := func() error {
-				v, err := d.Str()
-				s.Compatibility = string(v)
-				if err != nil {
+				s.Compatibility.Reset()
+				if err := s.Compatibility.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -885,11 +958,9 @@ func (s *SkillWrite) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"compatibility\"")
 			}
 		case "allowedTools":
-			requiredBitSet[0] |= 1 << 5
 			if err := func() error {
-				v, err := d.Str()
-				s.AllowedTools = string(v)
-				if err != nil {
+				s.AllowedTools.Reset()
+				if err := s.AllowedTools.Decode(d); err != nil {
 					return err
 				}
 				return nil
@@ -897,8 +968,8 @@ func (s *SkillWrite) Decode(d *jx.Decoder) error {
 				return errors.Wrap(err, "decode field \"allowedTools\"")
 			}
 		case "metadata":
-			requiredBitSet[0] |= 1 << 6
 			if err := func() error {
+				s.Metadata.Reset()
 				if err := s.Metadata.Decode(d); err != nil {
 					return err
 				}
@@ -916,7 +987,7 @@ func (s *SkillWrite) Decode(d *jx.Decoder) error {
 	// Validate required fields.
 	var failures []validate.FieldError
 	for i, mask := range [1]uint8{
-		0b01111111,
+		0b00000111,
 	} {
 		if result := (requiredBitSet[i] & mask) ^ mask; result != 0 {
 			// Mask only required fields and check equality to mask using XOR.

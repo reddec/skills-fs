@@ -157,8 +157,8 @@ components:
       description: Arbitrary string key-value metadata (SKILL.md frontmatter).
     SkillWrite:
       type: object
-      description: Editable skill fields. Optional string fields use empty string for "unset".
-      required: [name, description, body, license, compatibility, allowedTools, metadata]
+      description: Editable skill fields. Optional fields may be omitted.
+      required: [name, description, body]
       properties:
         name:
           type: string

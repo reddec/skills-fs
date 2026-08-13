@@ -102,6 +102,98 @@ func (o NilDateTime) Or(d time.Time) time.Time {
 	return d
 }
 
+// NewOptMetadata returns new OptMetadata with value set to v.
+func NewOptMetadata(v Metadata) OptMetadata {
+	return OptMetadata{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptMetadata is optional Metadata.
+type OptMetadata struct {
+	Value Metadata
+	Set   bool
+}
+
+// IsSet returns true if OptMetadata was set.
+func (o OptMetadata) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptMetadata) Reset() {
+	var v Metadata
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptMetadata) SetTo(v Metadata) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptMetadata) Get() (v Metadata, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptMetadata) Or(d Metadata) Metadata {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptString returns new OptString with value set to v.
+func NewOptString(v string) OptString {
+	return OptString{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptString is optional string.
+type OptString struct {
+	Value string
+	Set   bool
+}
+
+// IsSet returns true if OptString was set.
+func (o OptString) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptString) Reset() {
+	var v string
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptString) SetTo(v string) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptString) Get() (v string, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptString) Or(d string) string {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
 // Merged schema.
 // Ref: #/components/schemas/Skill
 type Skill struct {
@@ -324,18 +416,18 @@ func (s *SkillSummary) SetUpdatedAt(val time.Time) {
 	s.UpdatedAt = val
 }
 
-// Editable skill fields. Optional string fields use empty string for "unset".
+// Editable skill fields. Optional fields may be omitted.
 // Ref: #/components/schemas/SkillWrite
 type SkillWrite struct {
 	// Skill name = directory name. Lowercase a-z0-9 and hyphens, max 64 chars.
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	// SKILL.md markdown body after frontmatter.
-	Body          string   `json:"body"`
-	License       string   `json:"license"`
-	Compatibility string   `json:"compatibility"`
-	AllowedTools  string   `json:"allowedTools"`
-	Metadata      Metadata `json:"metadata"`
+	Body          string      `json:"body"`
+	License       OptString   `json:"license"`
+	Compatibility OptString   `json:"compatibility"`
+	AllowedTools  OptString   `json:"allowedTools"`
+	Metadata      OptMetadata `json:"metadata"`
 }
 
 // GetName returns the value of Name.
@@ -354,22 +446,22 @@ func (s *SkillWrite) GetBody() string {
 }
 
 // GetLicense returns the value of License.
-func (s *SkillWrite) GetLicense() string {
+func (s *SkillWrite) GetLicense() OptString {
 	return s.License
 }
 
 // GetCompatibility returns the value of Compatibility.
-func (s *SkillWrite) GetCompatibility() string {
+func (s *SkillWrite) GetCompatibility() OptString {
 	return s.Compatibility
 }
 
 // GetAllowedTools returns the value of AllowedTools.
-func (s *SkillWrite) GetAllowedTools() string {
+func (s *SkillWrite) GetAllowedTools() OptString {
 	return s.AllowedTools
 }
 
 // GetMetadata returns the value of Metadata.
-func (s *SkillWrite) GetMetadata() Metadata {
+func (s *SkillWrite) GetMetadata() OptMetadata {
 	return s.Metadata
 }
 
@@ -389,22 +481,22 @@ func (s *SkillWrite) SetBody(val string) {
 }
 
 // SetLicense sets the value of License.
-func (s *SkillWrite) SetLicense(val string) {
+func (s *SkillWrite) SetLicense(val OptString) {
 	s.License = val
 }
 
 // SetCompatibility sets the value of Compatibility.
-func (s *SkillWrite) SetCompatibility(val string) {
+func (s *SkillWrite) SetCompatibility(val OptString) {
 	s.Compatibility = val
 }
 
 // SetAllowedTools sets the value of AllowedTools.
-func (s *SkillWrite) SetAllowedTools(val string) {
+func (s *SkillWrite) SetAllowedTools(val OptString) {
 	s.AllowedTools = val
 }
 
 // SetMetadata sets the value of Metadata.
-func (s *SkillWrite) SetMetadata(val Metadata) {
+func (s *SkillWrite) SetMetadata(val OptMetadata) {
 	s.Metadata = val
 }
 

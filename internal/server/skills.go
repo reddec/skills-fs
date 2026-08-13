@@ -35,9 +35,9 @@ func (s *Server) CreateSkill(ctx context.Context, req *api.SkillWrite) (api.Crea
 		Name:          req.Name,
 		Description:   req.Description,
 		Body:          req.Body,
-		License:       req.License,
-		Compatibility: req.Compatibility,
-		AllowedTools:  req.AllowedTools,
+		License:       req.License.Or(""),
+		Compatibility: req.Compatibility.Or(""),
+		AllowedTools:  req.AllowedTools.Or(""),
 		Metadata:      meta,
 	})
 	if err != nil {
@@ -119,9 +119,9 @@ func (s *Server) UpdateSkill(ctx context.Context, req *api.SkillWrite, params ap
 		Name:          req.Name,
 		Description:   req.Description,
 		Body:          req.Body,
-		License:       req.License,
-		Compatibility: req.Compatibility,
-		AllowedTools:  req.AllowedTools,
+		License:       req.License.Or(""),
+		Compatibility: req.Compatibility.Or(""),
+		AllowedTools:  req.AllowedTools.Or(""),
 		Metadata:      meta,
 		ID:            params.ID,
 	}); err != nil {
@@ -168,7 +168,7 @@ func validateSkill(req *api.SkillWrite) string {
 	if req.Description == "" || len(req.Description) > maxDescriptionLen {
 		return "description must be 1-1024 characters"
 	}
-	if len(req.Compatibility) > maxCompatLen {
+	if compat := req.Compatibility.Or(""); len(compat) > maxCompatLen {
 		return "compatibility must be at most 500 characters"
 	}
 	return ""
@@ -189,11 +189,12 @@ func skillToAPI(s dbo.Skill) api.Skill {
 	}
 }
 
-func encodeMetadata(m api.Metadata) (string, error) {
-	if len(m) == 0 {
+func encodeMetadata(m api.OptMetadata) (string, error) {
+	val := m.Or(api.Metadata{})
+	if len(val) == 0 {
 		return "{}", nil
 	}
-	b, err := json.Marshal(m)
+	b, err := json.Marshal(val)
 	if err != nil {
 		return "", fmt.Errorf("marshal metadata: %w", err)
 	}
