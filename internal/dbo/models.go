@@ -13,9 +13,9 @@ type Skill struct {
 	Name          string    `json:"name"`
 	Description   string    `json:"description"`
 	Body          string    `json:"body"`
-	License       *string   `json:"license"`
-	Compatibility *string   `json:"compatibility"`
-	AllowedTools  *string   `json:"allowed_tools"`
+	License       string    `json:"license"`
+	Compatibility string    `json:"compatibility"`
+	AllowedTools  string    `json:"allowed_tools"`
 	Metadata      string    `json:"metadata"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`

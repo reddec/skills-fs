@@ -1,0 +1,148 @@
+// Command skills-fs is a single-user, self-hosted service that manages Agent Skills and
+// exposes them as a read-only HTTP filesystem for httpdirfs mounts.
+package main
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"os/signal"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/alecthomas/kong"
+	"github.com/reddec/skills-fs/internal/dbo"
+	"github.com/reddec/skills-fs/internal/server"
+)
+
+// Config binds CLI flags and SKILLSFS_* environment variables (via kong.DefaultEnvars).
+type Config struct {
+	Bind  string `name:"bind" help:"Bind address." default:":8080"`
+	Debug bool   `name:"debug" help:"Enable debug logging."`
+	DB    string `name:"db" help:"SQLite database path (\"file::memory:\" for ephemeral)." default:"skills.db"`
+
+	AdminAuth     string `name:"admin-auth" help:"Admin auth: none|basic|oidc." default:"none"`
+	AdminUser     string `name:"admin-user" help:"Admin username (basic auth)." default:"admin"`
+	AdminPassword string `name:"admin-password" help:"Admin password (basic auth)." env:"-"`
+
+	MountAuth string `name:"mount-auth" help:"Mount (/fs) auth: none|token." default:"none"`
+
+	OIDC struct {
+		Issuer       string `name:"issuer" help:"OIDC issuer URL."`
+		ClientID     string `name:"client-id" help:"OIDC client ID."`
+		ClientSecret string `name:"client-secret" help:"OIDC client secret."`
+		ServerURL    string `name:"server-url" help:"Public server URL for OIDC redirects."`
+		TrustProxy   bool   `name:"trust-proxy" help:"Trust X-Forwarded-* headers for OIDC."`
+	} `embed:"" prefix:"oidc."`
+
+	TLS struct {
+		Enabled bool   `name:"enabled" help:"Enable TLS." default:"false"`
+		Cert    string `name:"cert" help:"TLS certificate file." default:"/etc/tls/tls.crt"`
+		Key     string `name:"key" help:"TLS key file." default:"/etc/tls/tls.key"`
+	} `embed:"" prefix:"tls."`
+}
+
+func main() {
+	var cfg Config
+	kong.Parse(&cfg,
+		kong.Name("skills-fs"),
+		kong.Description("Manage Agent Skills and serve them as a read-only HTTP filesystem."),
+		kong.DefaultEnvars("SKILLSFS"),
+	)
+	if cfg.Debug {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+	}
+	if err := run(cfg); err != nil {
+		panic(err)
+	}
+}
+
+func run(cfg Config) error {
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	db, err := dbo.NewFromFile(cfg.DB)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	handler, err := server.New(ctx, server.Config{
+		DB:            db,
+		AdminAuth:     server.AdminAuth(cfg.AdminAuth),
+		AdminUser:     cfg.AdminUser,
+		AdminPassword: cfg.AdminPassword,
+		MountAuth:     server.MountAuth(cfg.MountAuth),
+		OIDC: server.OIDCConfig{
+			Issuer:       cfg.OIDC.Issuer,
+			ClientID:     cfg.OIDC.ClientID,
+			ClientSecret: cfg.OIDC.ClientSecret,
+			ServerURL:    cfg.OIDC.ServerURL,
+			TrustProxy:   cfg.OIDC.TrustProxy,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	handler = securityHeaders(handler, cfg.TLS.Enabled)
+	handler = http.NewCrossOriginProtection().Handler(handler)
+
+	httpServer := http.Server{
+		Addr:              cfg.Bind,
+		Handler:           handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+	}
+
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		<-ctx.Done()
+		slog.Info("shutting down server", "cause", context.Cause(ctx))
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer shutdownCancel()
+		if err := httpServer.Shutdown(shutdownCtx); err != nil { //nolint:contextcheck // parent ctx is already cancelled during shutdown
+			slog.Error("shutdown failed", "error", err)
+		}
+	})
+	wg.Go(func() {
+		defer cancel()
+		if cfg.TLS.Enabled {
+			slog.Info("starting server with TLS", "bind", cfg.Bind)
+			if err := httpServer.ListenAndServeTLS(cfg.TLS.Cert, cfg.TLS.Key); !errors.Is(err, http.ErrServerClosed) {
+				slog.Error("server failed", "error", err)
+			}
+			return
+		}
+		slog.Info("starting server", "bind", cfg.Bind)
+		if err := httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("server failed", "error", err)
+		}
+	})
+
+	slog.Info("started")
+	wg.Wait()
+	return nil
+}
+
+// securityHeaders adds a baseline set of OWASP response headers; HSTS is added only under TLS.
+func securityHeaders(next http.Handler, tls bool) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("X-XSS-Protection", "0")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		if tls || r.TLS != nil {
+			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+const (
+	readHeaderTimeout = 10 * time.Second
+	shutdownTimeout   = 5 * time.Second
+)

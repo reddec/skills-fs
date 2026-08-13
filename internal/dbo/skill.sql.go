@@ -17,13 +17,13 @@ RETURNING id
 `
 
 type CreateSkillParams struct {
-	Name          string  `json:"name"`
-	Description   string  `json:"description"`
-	Body          string  `json:"body"`
-	License       *string `json:"license"`
-	Compatibility *string `json:"compatibility"`
-	AllowedTools  *string `json:"allowed_tools"`
-	Metadata      string  `json:"metadata"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	Body          string `json:"body"`
+	License       string `json:"license"`
+	Compatibility string `json:"compatibility"`
+	AllowedTools  string `json:"allowed_tools"`
+	Metadata      string `json:"metadata"`
 }
 
 func (q *Queries) CreateSkill(ctx context.Context, arg CreateSkillParams) (int64, error) {
@@ -107,9 +107,9 @@ type ListSkillsRow struct {
 	ID            int64     `json:"id"`
 	Name          string    `json:"name"`
 	Description   string    `json:"description"`
-	License       *string   `json:"license"`
-	Compatibility *string   `json:"compatibility"`
-	AllowedTools  *string   `json:"allowed_tools"`
+	License       string    `json:"license"`
+	Compatibility string    `json:"compatibility"`
+	AllowedTools  string    `json:"allowed_tools"`
 	Metadata      string    `json:"metadata"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
@@ -163,14 +163,14 @@ WHERE id = ?
 `
 
 type UpdateSkillParams struct {
-	Name          string  `json:"name"`
-	Description   string  `json:"description"`
-	Body          string  `json:"body"`
-	License       *string `json:"license"`
-	Compatibility *string `json:"compatibility"`
-	AllowedTools  *string `json:"allowed_tools"`
-	Metadata      string  `json:"metadata"`
-	ID            int64   `json:"id"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	Body          string `json:"body"`
+	License       string `json:"license"`
+	Compatibility string `json:"compatibility"`
+	AllowedTools  string `json:"allowed_tools"`
+	Metadata      string `json:"metadata"`
+	ID            int64  `json:"id"`
 }
 
 func (q *Queries) UpdateSkill(ctx context.Context, arg UpdateSkillParams) error {
