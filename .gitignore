@@ -22,4 +22,4 @@ Thumbs.db
 # frontend
 /frontend/node_modules/
 /frontend/dist/
-/internal/web/dist/
+# NOTE: internal/web/dist is committed (embedded at build time) so `go build` works standalone.
