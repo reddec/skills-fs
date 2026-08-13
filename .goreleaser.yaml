@@ -1,0 +1,40 @@
+version: 2
+
+project_name: skills-fs
+
+before:
+  hooks:
+    # The SPA is embedded at Go build time, so it must be built first.
+    - "sh -c 'cd frontend && npm ci && npm run build'"
+
+builds:
+  - env: [CGO_ENABLED=0]
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: ["-s -w"]
+
+archives:
+  - formats: binary
+    name_template: "{{ .Binary }}_{{ .Os }}-{{ .Arch }}"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+dockers_v2:
+  - images:
+      - "ghcr.io/reddec/skills-fs"
+    platforms: [linux/amd64, linux/arm64]
+    tags:
+      - "{{ .Version }}"
+      - "latest"
+    labels:
+      "org.opencontainers.image.title": "{{.ProjectName}}"
+      "org.opencontainers.image.source": "{{.GitURL}}"
+      "org.opencontainers.image.version": "{{.Version}}"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"

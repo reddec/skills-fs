@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - run: git fetch --tags --force
+
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+
+      # goreleaser's before-hook builds the SPA (npm), so Node is required.
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+
+      # Multi-arch image build needs QEMU + a docker-container builder.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          version: latest
+          args: release --clean
