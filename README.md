@@ -2,7 +2,7 @@
 
 Single-user, self-hosted service that manages **Agent Skills** (one `SKILL.md` per skill
 directory, per [agentskills.io](https://agentskills.io)) and serves them as a read-only HTTP
-filesystem mountable with [httpdirfs](https://github.com/fangfufu/httpdirfs). One binary; the
+filesystem mountable with [rclone](https://rclone.org/http/). One binary; the
 React admin UI is embedded.
 
 ## Configuration
@@ -48,17 +48,20 @@ make build    # go build
 `go generate ./...` regenerates the `sqlc` and `ogen` code from `internal/dbo/queries` and
 `openapi.yaml`.
 
-## Mounting with httpdirfs
+## Mounting with rclone
 
-Open the admin UI, create a skill, then (if `--mount-auth token`) issue a token — the token
-dialog shows a ready-to-copy command. Without auth:
+The read-only `/fs/` is consumed by [rclone](https://rclone.org/http/) (single static binary,
+all platforms). The admin UI's **Mount** page generates copy-paste install + mount scripts per
+OS (incl. systemd/launchd auto-start) and per agent target (`~/.agents/skills`, `~/.claude/skills`).
+If `--mount-auth token`, issue a token there first — it is filled into the commands. Quick form:
 
 ```bash
-httpdirfs https://skills.example/fs/ /mnt/skills
+rclone mount :http: ~/.agents/skills --http-url 'https://skills:<TOKEN>@skills.example/fs/' \
+  --vfs-cache-mode off --read-only
 ```
 
-> **Privacy:** mount **without** `--cache` so skill content stays in RAM and is not written to
-> the local disk. `/fs` responses set `Cache-Control: no-store`.
+> **Privacy:** `--vfs-cache-mode off` keeps skill content in RAM (nothing written to local disk).
+> `/fs` responses also set `Cache-Control: no-store`.
 
 ## Layout
 

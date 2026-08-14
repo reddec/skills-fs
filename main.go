@@ -1,5 +1,5 @@
 // Command skills-fs is a single-user, self-hosted service that manages Agent Skills and
-// exposes them as a read-only HTTP filesystem for httpdirfs mounts.
+// exposes them as a read-only HTTP filesystem for mounting with rclone.
 package main
 
 import (

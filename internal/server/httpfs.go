@@ -20,7 +20,8 @@ var httpfsLogger = slog.Default().With("controller", "httpfs") //nolint:gocheckn
 
 const yamlIndent = 2
 
-// newHTTPFS builds the httpdirfs-compatible read-only filesystem rooted at the skills list.
+// newHTTPFS builds the read-only HTTP filesystem (standard directory listing + Range, consumed
+// by rclone and other HTTP directory clients), rooted at the skills list.
 func newHTTPFS(q *dbo.Queries) http.Handler {
 	h := &httpfsHandler{q: q}
 	return http.HandlerFunc(h.ServeHTTP)

@@ -9,61 +9,69 @@ import { api } from "../lib/api";
 import { cn } from "../lib/utils";
 import { toast } from "sonner";
 
-type Distro = "debian" | "fedora" | "arch" | "macos";
-type Mode = "run" | "systemd";
+type Distro = "debian" | "fedora" | "arch" | "macos" | "windows";
+type Mode = "run" | "systemd" | "launchd";
 type Target = "agentic" | "claude";
 
 const ORIGIN = typeof window !== "undefined" ? window.location.origin : "https://skills-fs.example";
 
-const INSTALL: Record<Distro, string> = {
-  debian: "sudo apt-get update\nsudo apt-get install -y httpdirfs  # Debian 13+ / recent Ubuntu",
-  fedora: [
-    "# httpdirfs is not packaged for Fedora; build it from source.",
-    "sudo dnf install -y git meson clang-format gcc \\",
-    "    gumbo-parser-devel openssl-devel libcurl-devel expat-devel \\",
-    "    libuuid-devel fuse3-devel pkgconf-pkg-config",
-    "git clone --depth 1 https://github.com/fangfufu/httpdirfs /tmp/httpdirfs",
-    "cd /tmp/httpdirfs && meson setup builddir && cd builddir && meson compile && sudo meson install",
-  ].join("\n"),
-  arch: "paru -S --noconfirm httpdirfs || yay -S --noconfirm httpdirfs  # from the AUR",
-  macos: [
-    "brew install gumbo-parser openssl@3 curl expat meson pkg-config ossp-uuid",
-    "brew install --cask macfuse   # grants the FUSE extension; reboot after first install",
-    'export PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig:$(brew --prefix)/lib/pkgconfig:$PKG_CONFIG_PATH"',
-    "git clone --depth 1 https://github.com/fangfufu/httpdirfs /tmp/httpdirfs",
-    "cd /tmp/httpdirfs && meson setup builddir && cd builddir && meson compile && sudo meson install",
-  ].join("\n"),
+const DISTROS: { value: Distro; label: string }[] = [
+  { value: "debian", label: "Debian/Ubuntu" },
+  { value: "fedora", label: "Fedora" },
+  { value: "arch", label: "Arch" },
+  { value: "macos", label: "macOS" },
+  { value: "windows", label: "Windows" },
+];
+
+const MODES: Record<Distro, { value: Mode; label: string }[]> = {
+  debian: [{ value: "run", label: "Just run" }, { value: "systemd", label: "systemd" }],
+  fedora: [{ value: "run", label: "Just run" }, { value: "systemd", label: "systemd" }],
+  arch: [{ value: "run", label: "Just run" }, { value: "systemd", label: "systemd" }],
+  macos: [{ value: "run", label: "Just run" }, { value: "launchd", label: "launchd" }],
+  windows: [{ value: "run", label: "Just run" }],
 };
 
-function mountPath(target: Target): string {
+const UNIX_INSTALL: Record<Exclude<Distro, "windows">, string> = {
+  debian: "sudo apt-get update\nsudo apt-get install -y rclone fuse3",
+  fedora: "sudo dnf install -y rclone fuse",
+  arch: "sudo pacman -S --noconfirm rclone fuse3",
+  macos: "brew install rclone\nbrew install --cask macfuse  # grant the FUSE extension; reboot after first install",
+};
+
+function unixMount(target: Target): string {
   return target === "agentic" ? "$HOME/.agents/skills" : "$HOME/.claude/skills";
 }
 
-function buildScript(target: Target, distro: Distro, mode: Mode, token: string): string {
-  const tokenComment = token
-    ? "auto-created; revoke from the Tokens page"
-    : "paste a token from the Tokens page (leave blank if mount-auth is none)";
+function windowsMount(target: Target): string {
+  return target === "agentic" ? `%USERPROFILE%\\.agents\\skills` : `%USERPROFILE%\\.claude\\skills`;
+}
+
+// url embeds the token (if any) as basic-auth credentials the server already accepts.
+function buildURL(token: string): string {
+  const base = ORIGIN + "/fs/";
+  return token ? ORIGIN.replace("://", `://skills:${token}@`) + "/fs/" : base;
+}
+
+function buildUnix(target: Target, distro: Exclude<Distro, "windows">, mode: Mode, url: string): string {
+  const mount = unixMount(target);
   const header = `#!/usr/bin/env bash
 set -euo pipefail
 
-URL="${ORIGIN}/fs/"
-TOKEN="${token}"            # ${tokenComment}
-MOUNT="${mountPath(target)}"
+URL="${url}"
+MOUNT="${mount}"
 
-# --- install httpdirfs ---
-${INSTALL[distro]}
+# --- install rclone + FUSE ---
+${UNIX_INSTALL[distro]}
 
 mkdir -p "$MOUNT"
-# Detected after install so a freshly built binary is found (e.g. /usr/local/bin on Fedora/macOS).
-BIN="$(command -v httpdirfs || echo /usr/bin/httpdirfs)"
 `;
 
   if (mode === "run") {
     return (
       header +
       `
-# Foreground mount (Ctrl+C to stop). Mount WITHOUT --cache so skills stay in RAM.
-exec "$BIN" -f -u skills -p "$TOKEN" "$URL" "$MOUNT"
+# Foreground read-only mount (Ctrl+C to stop). No disk cache: skills stay in RAM.
+exec rclone mount :http: "$MOUNT" --http-url "$URL" --vfs-cache-mode off --read-only
 `
     );
   }
@@ -72,6 +80,7 @@ exec "$BIN" -f -u skills -p "$TOKEN" "$URL" "$MOUNT"
     header +
     `
 # --- systemd user service: auto-mounts at login ---
+RCLONE_BIN="$(command -v rclone)"
 mkdir -p "$HOME/.config/systemd/user"
 cat > "$HOME/.config/systemd/user/skills-fs.service" <<UNIT
 [Unit]
@@ -81,7 +90,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=\${BIN} -f -u skills -p \${TOKEN} \${URL} \${MOUNT}
+Environment=RCLONE_HTTP_URL=\${URL}
+ExecStart=\${RCLONE_BIN} mount :http: \${MOUNT} --vfs-cache-mode off --read-only
 Restart=on-failure
 RestartSec=5
 
@@ -91,9 +101,72 @@ UNIT
 
 systemctl --user daemon-reload
 systemctl --user enable --now skills-fs.service
-echo "Enabled. Check status with: systemctl --user status skills-fs.service"
+echo "Enabled. Status: systemctl --user status skills-fs.service"
 `
   );
+}
+
+function buildLaunchd(target: Target, url: string): string {
+  const dir = target === "agentic" ? ".agents/skills" : ".claude/skills";
+  return `#!/usr/bin/env bash
+set -euo pipefail
+
+URL="${url}"
+
+brew install rclone
+brew install --cask macfuse  # grant the FUSE extension; reboot after first install
+
+mkdir -p "$HOME/${dir}"
+RCLONE_BIN="$(command -v rclone)"
+PLIST="$HOME/Library/LaunchAgents/com.reddec.skills-fs.plist"
+
+cat > "$PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.reddec.skills-fs</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>\${RCLONE_BIN}</string>
+        <string>mount</string>
+        <string>:http:</string>
+        <string>\${HOME}/${dir}</string>
+        <string>--vfs-cache-mode</string><string>off</string>
+        <string>--read-only</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>RCLONE_HTTP_URL</key><string>\${URL}</string>
+    </dict>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+</dict>
+</plist>
+PLIST
+
+launchctl load "$PLIST"
+echo "Loaded. Unload with: launchctl unload \\"$PLIST\\""
+`;
+}
+
+function buildWindows(target: Target, url: string): string {
+  return `:: Install rclone + WinFsp (run in an elevated terminal)
+winget install Rclone.Rclone
+winget install WinFsp.WinFsp
+
+:: Read-only mount with no disk cache. Ctrl+C to stop.
+rclone mount :http: "${windowsMount(target)}" --http-url "${url}" --vfs-cache-mode off --read-only
+
+:: To auto-start, schedule the command above in Task Scheduler.
+`;
+}
+
+function buildScript(target: Target, distro: Distro, mode: Mode, token: string): string {
+  const url = buildURL(token);
+  if (distro === "windows") return buildWindows(target, url);
+  if (mode === "launchd") return buildLaunchd(target, url);
+  return buildUnix(target, distro, mode, url);
 }
 
 export function SetupPage() {
@@ -104,26 +177,36 @@ export function SetupPage() {
   const [prefix, setPrefix] = useState("");
   const [creating, setCreating] = useState(false);
 
-  // Prefer the OS the browser reports.
   useEffect(() => {
     const ua = (typeof navigator !== "undefined" && navigator.userAgent) || "";
     const platform = (typeof navigator !== "undefined" && navigator.platform) || "";
-    if (/Mac/i.test(platform) || /Macintosh/i.test(ua)) setDistro("macos");
-    else if (/Arch|Linux/i.test(ua) && /Arch/i.test(ua)) setDistro("arch");
+    if (/Win/i.test(platform) || /Windows/i.test(ua)) setDistro("windows");
+    else if (/Mac/i.test(platform) || /Macintosh/i.test(ua)) setDistro("macos");
+    else if (/Arch/i.test(ua)) setDistro("arch");
+    else if (/Fedora/i.test(ua)) setDistro("fedora");
     else if (/Linux/i.test(ua)) setDistro("debian");
   }, []);
 
+  // Keep the mode valid for the chosen distro.
+  useEffect(() => {
+    if (!MODES[distro].some((m) => m.value === mode)) {
+      setMode(MODES[distro][0].value);
+    }
+  }, [distro, mode]);
+
   const script = useMemo(() => buildScript(target, distro, mode, token), [target, distro, mode, token]);
-  const tokenPlaceholder = token || "<TOKEN>";
+  const urlPreview = buildURL(token || "<TOKEN>");
+  const mountLabel = distro === "windows" ? windowsMount(target) : unixMount(target).replace("$HOME", "~");
 
   return (
     <div className="mx-auto grid max-w-5xl gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Mount</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Skills are exposed as a read-only filesystem at <span className="font-mono">{ORIGIN}/fs/</span>. Mount it
-          with <span className="font-mono">httpdirfs</span> wherever your agent reads skills, and{" "}
-          <strong>without</strong> <span className="font-mono">--cache</span> so content is never written to disk.
+          Skills are exposed as a read-only filesystem at <span className="font-mono">{ORIGIN}/fs/</span>. Mount them
+          with <a className="underline underline-offset-4" href="https://rclone.org" target="_blank" rel="noreferrer">rclone</a>{" "}
+          wherever your agent reads skills. <strong>Without</strong> <span className="font-mono">--vfs-cache-mode</span>{" "}
+          caching, content is never written to disk.
         </p>
       </div>
 
@@ -136,9 +219,7 @@ export function SetupPage() {
                 Using <span className="font-mono">{prefix}…</span> — revoke it on the Tokens page.
               </>
             ) : (
-              <>
-                Create a token to auto-fill the commands below, or get one from the Tokens page.
-              </>
+              <>Create a token to auto-fill the commands below, or get one from the Tokens page.</>
             )}
           </p>
         </div>
@@ -148,16 +229,16 @@ export function SetupPage() {
       </section>
 
       <section className="grid gap-3">
-        <h2 className="text-lg font-medium">Quick mount</h2>
-        <p className="text-sm text-muted-foreground">If <span className="font-mono">httpdirfs</span> is already installed.</p>
+        <h2 className="text-lg font-medium">Quick mount (macOS / Linux)</h2>
+        <p className="text-sm text-muted-foreground">If <span className="font-mono">rclone</span> is already installed.</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid gap-1">
             <p className="text-sm font-medium">Agentic</p>
-            <Bash code={`httpdirfs -f -u skills -p ${tokenPlaceholder} ${ORIGIN}/fs/ ~/.agents/skills`} />
+            <Bash code={`rclone mount :http: ~/.agents/skills --http-url '${urlPreview}' --vfs-cache-mode off --read-only`} />
           </div>
           <div className="grid gap-1">
             <p className="text-sm font-medium">Claude</p>
-            <Bash code={`httpdirfs -f -u skills -p ${tokenPlaceholder} ${ORIGIN}/fs/ ~/.claude/skills`} />
+            <Bash code={`rclone mount :http: ~/.claude/skills --http-url '${urlPreview}' --vfs-cache-mode off --read-only`} />
           </div>
         </div>
       </section>
@@ -165,40 +246,14 @@ export function SetupPage() {
       <section className="grid gap-3">
         <h2 className="text-lg font-medium">Install &amp; mount script</h2>
         <div className="flex flex-wrap items-center gap-2">
-          <Segmented
-            label="Target"
-            value={target}
-            options={[
-              { value: "agentic", label: "Agentic" },
-              { value: "claude", label: "Claude" },
-            ]}
-            onChange={(v) => setTarget(v as Target)}
-          />
-          <Segmented
-            label="Distro"
-            value={distro}
-            options={[
-              { value: "debian", label: "Debian/Ubuntu" },
-              { value: "fedora", label: "Fedora" },
-              { value: "arch", label: "Arch" },
-              { value: "macos", label: "macOS" },
-            ]}
-            onChange={(v) => setDistro(v as Distro)}
-          />
-          <Segmented
-            label="Mode"
-            value={mode}
-            options={[
-              { value: "run", label: "Just run" },
-              { value: "systemd", label: "systemd" },
-            ]}
-            onChange={(v) => setMode(v as Mode)}
-          />
+          <Segmented label="Target" value={target} options={[{ value: "agentic", label: "Agentic" }, { value: "claude", label: "Claude" }]} onChange={(v) => setTarget(v as Target)} />
+          <Segmented label="System" value={distro} options={DISTROS} onChange={(v) => setDistro(v as Distro)} />
+          <Segmented label="Mode" value={mode} options={MODES[distro]} onChange={(v) => setMode(v as Mode)} />
         </div>
         <Bash code={script} />
         <p className="text-xs text-muted-foreground">
-          Mounts to <Badge variant="muted" className="font-mono">{mountPath(target)}</Badge>. Review the script before
-          running. {mode === "run" ? "Just-run mounts stop when the terminal closes." : "systemd mounts auto-start at login."}
+          Mounts to <Badge variant="muted" className="font-mono">{mountLabel}</Badge>. Review the script before running.
+          {mode === "run" ? " Just-run mounts stop when the terminal closes." : " Auto-starts at login."}
         </p>
       </section>
 

@@ -86,7 +86,7 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 		return nil, err
 	}
 	// gzip covers only the admin routes: compressing /fs/ responses would corrupt the Range
-	// (206) partial responses that httpdirfs relies on.
+	// (206) partial responses that HTTP clients like rclone rely on.
 	adminHandler = gziphandler.GzipHandler(adminHandler)
 
 	mountHandler := wrapMount(http.StripPrefix("/fs", newHTTPFS(cfg.DB)), cfg)

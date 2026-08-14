@@ -58,7 +58,7 @@ export function TokensPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Mount tokens</h1>
           <p className="text-sm text-muted-foreground">
-            Tokens authenticate <span className="font-mono">httpdirfs</span> mounts. See the{" "}
+            Tokens authenticate HTTP filesystem mounts (e.g. rclone). See the{" "}
             <Link to="/setup" className="underline underline-offset-4">
               Mount
             </Link>{" "}
