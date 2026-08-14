@@ -6,6 +6,7 @@ import { ArrowLeft, FileText, Settings2 } from "lucide-react";
 import { api, type SkillWrite } from "../lib/api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { Textarea } from "../components/ui/textarea";
 import { Label } from "../components/ui/label";
 import { Skeleton } from "../components/ui/skeleton";
 import { toast } from "sonner";
@@ -158,11 +159,13 @@ export function SkillEditorPage({ mode }: { mode: "create" | "edit" }) {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="description">Description</Label>
-                <Input
+                <Textarea
                   id="description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="What this skill does and when to use it."
+                  rows={3}
+                  className="resize-y font-sans"
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
