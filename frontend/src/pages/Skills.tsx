@@ -1,21 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Search } from "lucide-react";
-import { api, type Skill, type SkillSummary } from "../lib/api";
+import { api, type SkillSummary } from "../lib/api";
 import { shortDate } from "../lib/utils";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Card } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog";
-import { SkillForm } from "../components/SkillForm";
 
 export function SkillsPage() {
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const query = params.get("q") ?? "";
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
-  const [creating, setCreating] = useState(false);
 
   async function refresh() {
     setState("loading");
@@ -43,7 +41,7 @@ export function SkillsPage() {
     <div className="grid gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
-        <Button onClick={() => setCreating(true)}>
+        <Button onClick={() => navigate("/skills/new")}>
           <Plus /> New skill
         </Button>
       </div>
@@ -69,7 +67,10 @@ export function SkillsPage() {
 
       {state === "error" && (
         <Card className="p-6 text-sm text-muted-foreground">
-          Could not load skills. <Button variant="link" className="h-auto p-0 align-baseline" onClick={refresh}>Retry</Button>
+          Could not load skills.{" "}
+          <Button variant="link" className="h-auto p-0 align-baseline" onClick={refresh}>
+            Retry
+          </Button>
         </Card>
       )}
 
@@ -80,7 +81,7 @@ export function SkillsPage() {
             {query ? "Try a different query." : "Create your first skill to get started."}
           </p>
           {!query && (
-            <Button className="mt-4" onClick={() => setCreating(true)}>
+            <Button className="mt-4" onClick={() => navigate("/skills/new")}>
               <Plus /> New skill
             </Button>
           )}
@@ -104,38 +105,6 @@ export function SkillsPage() {
           ))}
         </div>
       )}
-
-      <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New skill</DialogTitle>
-            <DialogDescription>Create an Agent Skill directory with a SKILL.md.</DialogDescription>
-          </DialogHeader>
-          <SkillForm
-            submitLabel="Create skill"
-            onSubmit={async (data) => {
-              const created = await api.createSkill(data);
-              setCreating(false);
-              setSkills((prev) => [...prev, toSummary(created)]);
-            }}
-            onCancel={() => setCreating(false)}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
-}
-
-function toSummary(s: Skill): SkillSummary {
-  return {
-    id: s.id,
-    name: s.name,
-    description: s.description,
-    license: s.license,
-    compatibility: s.compatibility,
-    allowedTools: s.allowedTools,
-    metadata: s.metadata,
-    createdAt: s.createdAt,
-    updatedAt: s.updatedAt,
-  };
 }

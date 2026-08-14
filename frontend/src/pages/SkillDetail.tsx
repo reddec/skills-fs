@@ -8,7 +8,6 @@ import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
 import { Badge } from "../components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,7 +18,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../components/ui/alert-dialog";
-import { SkillForm } from "../components/SkillForm";
 import { toast } from "sonner";
 
 export function SkillDetailPage() {
@@ -27,7 +25,6 @@ export function SkillDetailPage() {
   const navigate = useNavigate();
   const [skill, setSkill] = useState<Skill | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error" | "missing">("loading");
-  const [editing, setEditing] = useState(false);
 
   async function refresh() {
     if (!id) return;
@@ -86,7 +83,7 @@ export function SkillDetailPage() {
           </Link>
         </Button>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setEditing(true)}>
+          <Button variant="outline" onClick={() => navigate(`/skills/${skill.id}/edit`)}>
             <Pencil /> Edit
           </Button>
           <AlertDialog>
@@ -99,7 +96,8 @@ export function SkillDetailPage() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete skill {skill.name}?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This permanently removes the skill directory <span className="font-mono">{skill.name}</span> and its SKILL.md. Agents will no longer see it. This cannot be undone.
+                  This permanently removes the skill directory <span className="font-mono">{skill.name}</span> and its
+                  SKILL.md. Agents will no longer see it. This cannot be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -140,26 +138,6 @@ export function SkillDetailPage() {
           <ReactMarkdown>{skill.body || "_(No body.)_"}</ReactMarkdown>
         </article>
       </Card>
-
-      <Dialog open={editing} onOpenChange={setEditing}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit skill</DialogTitle>
-            <DialogDescription>Update the SKILL.md frontmatter and body.</DialogDescription>
-          </DialogHeader>
-          <SkillForm
-            initial={skill}
-            submitLabel="Save changes"
-            onSubmit={async (data) => {
-              const updated = await api.updateSkill(skill.id, data);
-              setSkill(updated);
-              setEditing(false);
-              toast.success("Skill saved.");
-            }}
-            onCancel={() => setEditing(false)}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

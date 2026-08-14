@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Copy, Check, KeyRound, Plus, Trash2 } from "lucide-react";
 import { api, type Token, type TokenCreated } from "../lib/api";
 import { shortDate } from "../lib/utils";
@@ -20,12 +21,6 @@ import {
   AlertDialogTrigger,
 } from "../components/ui/alert-dialog";
 import { toast } from "sonner";
-
-// mountCommand builds the httpdirfs invocation; origin comes from the browser itself.
-function mountCommand(token: string): string {
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://skills-fs.example";
-  return `httpdirfs -u skills -p ${token} ${origin}/fs/ /mnt/skills`;
-}
 
 export function TokensPage() {
   const [tokens, setTokens] = useState<Token[]>([]);
@@ -63,8 +58,11 @@ export function TokensPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Mount tokens</h1>
           <p className="text-sm text-muted-foreground">
-            Tokens authenticate <span className="font-mono">httpdirfs</span> mounts. Mount without{" "}
-            <span className="font-mono">--cache</span> to keep skills off the local disk.
+            Tokens authenticate <span className="font-mono">httpdirfs</span> mounts. See the{" "}
+            <Link to="/setup" className="underline underline-offset-4">
+              Mount
+            </Link>{" "}
+            page for setup instructions.
           </p>
         </div>
         <Button onClick={() => setCreating(true)}>
@@ -75,14 +73,17 @@ export function TokensPage() {
       {state === "loading" && (
         <div className="grid gap-2">
           {Array.from({ length: 2 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 w-full" />
+            <Skeleton key={i} className="h-16 w-full" />
           ))}
         </div>
       )}
 
       {state === "error" && (
         <Card className="p-6 text-sm text-muted-foreground">
-          Could not load tokens. <Button variant="link" className="h-auto p-0 align-baseline" onClick={refresh}>Retry</Button>
+          Could not load tokens.{" "}
+          <Button variant="link" className="h-auto p-0 align-baseline" onClick={refresh}>
+            Retry
+          </Button>
         </Card>
       )}
 
@@ -96,7 +97,7 @@ export function TokensPage() {
       {state === "ready" &&
         tokens.map((token) => (
           <Card key={token.id} className="p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div className="grid gap-1">
                 <div className="flex items-center gap-2">
                   <KeyRound className="h-4 w-4 text-muted-foreground" />
@@ -119,7 +120,8 @@ export function TokensPage() {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Revoke token for {token.label || "Untitled"}?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Mounts using this token (prefix <span className="font-mono">{token.prefix}…</span>) will immediately stop working. This cannot be undone.
+                      Mounts using this token (prefix <span className="font-mono">{token.prefix}…</span>) will
+                      immediately stop working. This cannot be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -129,7 +131,6 @@ export function TokensPage() {
                 </AlertDialogContent>
               </AlertDialog>
             </div>
-            <CommandField command={mountCommand("<TOKEN>")} />
           </Card>
         ))}
 
@@ -142,28 +143,6 @@ export function TokensPage() {
         }}
       />
       <RevealTokenDialog issued={issued} onClose={() => setIssued(null)} onDone={refresh} />
-    </div>
-  );
-}
-
-function CommandField({ command }: { command: string }) {
-  const [copied, setCopied] = useState(false);
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(command);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      toast.error("Copy failed.");
-    }
-  }
-  return (
-    <div className="mt-3 flex items-center gap-2 rounded-md border bg-muted/40 p-2">
-      <code className="flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs">{command}</code>
-      <Button variant="ghost" size="sm" onClick={copy} aria-label="Copy command">
-        {copied ? <Check /> : <Copy />}
-        {copied ? "Copied" : "Copy"}
-      </Button>
     </div>
   );
 }
@@ -266,14 +245,18 @@ function RevealTokenDialog({
           </DialogDescription>
         </DialogHeader>
         {issued && (
-          <div className="grid gap-3">
-            <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-2">
-              <code className="flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs">{issued.token}</code>
-              <CopyButton text={issued.token} />
-            </div>
-            <CommandField command={mountCommand(issued.token)} />
+          <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-3">
+            <code className="flex-1 break-all font-mono text-xs">{issued.token}</code>
+            <CopyButton text={issued.token} />
           </div>
         )}
+        <p className="text-sm text-muted-foreground">
+          See the{" "}
+          <Link to="/setup" className="underline underline-offset-4">
+            Mount
+          </Link>{" "}
+          page for ready-to-copy install and mount commands.
+        </p>
         <div className="flex justify-end">
           <Button
             onClick={() => {
@@ -295,6 +278,7 @@ function CopyButton({ text }: { text: string }) {
     <Button
       variant="ghost"
       size="sm"
+      className="shrink-0"
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);
