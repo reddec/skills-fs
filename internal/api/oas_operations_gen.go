@@ -6,12 +6,15 @@ package api
 type OperationName = string
 
 const (
-	CreateSkillOperation OperationName = "CreateSkill"
-	CreateTokenOperation OperationName = "CreateToken"
-	DeleteSkillOperation OperationName = "DeleteSkill"
-	DeleteTokenOperation OperationName = "DeleteToken"
-	GetSkillOperation    OperationName = "GetSkill"
-	ListSkillsOperation  OperationName = "ListSkills"
-	ListTokensOperation  OperationName = "ListTokens"
-	UpdateSkillOperation OperationName = "UpdateSkill"
+	CreateGenerationOperation OperationName = "CreateGeneration"
+	CreateSkillOperation      OperationName = "CreateSkill"
+	CreateTokenOperation      OperationName = "CreateToken"
+	DeleteSkillOperation      OperationName = "DeleteSkill"
+	DeleteTokenOperation      OperationName = "DeleteToken"
+	GetConfigOperation        OperationName = "GetConfig"
+	GetGenerationOperation    OperationName = "GetGeneration"
+	GetSkillOperation         OperationName = "GetSkill"
+	ListSkillsOperation       OperationName = "ListSkills"
+	ListTokensOperation       OperationName = "ListTokens"
+	UpdateSkillOperation      OperationName = "UpdateSkill"
 )

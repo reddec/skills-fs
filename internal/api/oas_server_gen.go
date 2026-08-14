@@ -8,6 +8,13 @@ import (
 
 // Handler handles operations described by OpenAPI v3 specification.
 type Handler interface {
+	// CreateGeneration implements createGeneration operation.
+	//
+	// Start asynchronous skill generation from a raw idea. The job runs in the background; poll GET
+	// /generate/{id} for the result. Disabled unless the LLM API key is configured at startup.
+	//
+	// POST /generate
+	CreateGeneration(ctx context.Context, req *GenerationWrite) (CreateGenerationRes, error)
 	// CreateSkill implements createSkill operation.
 	//
 	// Create a skill.
@@ -32,6 +39,18 @@ type Handler interface {
 	//
 	// DELETE /tokens/{id}
 	DeleteToken(ctx context.Context, params DeleteTokenParams) (DeleteTokenRes, error)
+	// GetConfig implements getConfig operation.
+	//
+	// Non-secret server configuration, e.g. whether skill generation is enabled.
+	//
+	// GET /config
+	GetConfig(ctx context.Context) (*ServerConfig, error)
+	// GetGeneration implements getGeneration operation.
+	//
+	// Get the state of a generation job.
+	//
+	// GET /generate/{id}
+	GetGeneration(ctx context.Context, params GetGenerationParams) (GetGenerationRes, error)
 	// GetSkill implements getSkill operation.
 	//
 	// Get a single skill including its body.

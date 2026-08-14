@@ -26,8 +26,25 @@ Flags map to `SKILLSFS_*` env vars (e.g. `--bind` → `SKILLSFS_BIND`).
 | `--tls.enabled` / `SKILLSFS_TLS_ENABLED` | off | Enable TLS. |
 | `--tls.cert` / `SKILLSFS_TLS_CERT` | `/etc/tls/tls.crt` | TLS certificate. |
 | `--tls.key` / `SKILLSFS_TLS_KEY` | `/etc/tls/tls.key` | TLS key. |
+| `--llm.base-url` / `SKILLSFS_LLM_BASE_URL` | `https://api.deepseek.com/v1` | OpenAI-compatible API base URL for skill generation. |
+| `--llm.api-key` / `SKILLSFS_LLM_API_KEY` | | API key; when set, the **Generate** button appears in the UI. |
+| `--llm.model` / `SKILLSFS_LLM_MODEL` | `deepseek-v4-flash` | Model used for skill generation. |
 
 Routes: `/` admin SPA + `/api/v1` admin API; `/fs/` read-only filesystem.
+
+## Generating skills (optional)
+
+With `SKILLSFS_LLM_API_KEY` set, the Skills page shows a **Generate** button: paste a raw
+idea or draft, and an agent (via [pikoagent](https://github.com/pikorun/pikoagent)) turns it
+into a complete skill — name, description, and `SKILL.md` body. The generation runs in the
+background: you can close the page, and the finished skill appears in the list (with a
+notification) when done. The system prompt embeds the
+[Agent Skills specification](https://agentskills.io/specification.md) and the
+[skill-creator best practices](https://www.skills.sh/anthropics/skills/skill-creator); the
+agent has no tools besides `submit_skill`, so it never fetches external sources.
+
+> **Privacy:** your idea text is sent to the configured LLM provider (DeepSeek by default).
+> Skills are only created after you trigger generation; existing skills stay local to the DB.
 
 ## Docker
 
@@ -69,6 +86,7 @@ rclone mount :http: ~/.agents/skills --http-url 'https://skills:<TOKEN>@skills.e
 openapi.yaml        # API contract → ogen generates internal/api
 internal/dbo        # sqlc + SQLite (CGO-free, modernc.org/sqlite)
 internal/server     # handlers: admin API, auth, read-only /fs
+internal/generate   # background skill generation (LLM agent, async jobs)
 internal/web        # embedded SPA
 frontend            # React + Vite + Tailwind + shadcn/ui
 ```

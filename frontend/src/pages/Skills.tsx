@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Search } from "lucide-react";
-import { api, type SkillSummary } from "../lib/api";
+import { Plus, Search, Sparkles } from "lucide-react";
+import { toast } from "sonner";
+import { api, type Generation, type ServerConfig, type SkillSummary } from "../lib/api";
 import { shortDate } from "../lib/utils";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Card } from "../components/ui/card";
 import { Skeleton } from "../components/ui/skeleton";
+import { GenerateSkillDialog } from "../components/GenerateSkillDialog";
 
 export function SkillsPage() {
   const navigate = useNavigate();
@@ -15,7 +17,14 @@ export function SkillsPage() {
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
 
-  async function refresh() {
+  // Agent-based generation is conditional: visible only when the server was started with
+  // an LLM API key.
+  const [llm, setLlm] = useState<ServerConfig["llm"] | null>(null);
+  const [genOpen, setGenOpen] = useState(false);
+  const [genJob, setGenJob] = useState<Generation | null>(null);
+  const [genSubmitting, setGenSubmitting] = useState(false);
+
+  const refresh = useCallback(async () => {
     setState("loading");
     try {
       setSkills(await api.listSkills());
@@ -23,11 +32,65 @@ export function SkillsPage() {
     } catch {
       setState("error");
     }
-  }
+  }, []);
 
   useEffect(() => {
     refresh();
-  }, []);
+    api
+      .getConfig()
+      .then((cfg) => setLlm(cfg.llm))
+      .catch(() => setLlm(null));
+  }, [refresh]);
+
+  // Poll the background generation job until it finishes — even with the dialog closed,
+  // so completion surfaces as a toast with a link to the new skill.
+  useEffect(() => {
+    if (!genJob || genJob.status !== "running") return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const job = await api.getGeneration(genJob.id);
+        if (cancelled) return;
+        if (job.status === "done") {
+          setGenJob(job);
+          if (!genOpen) {
+            toast.success("Skill generated", {
+              description: `"${job.skillName ?? "Skill"}" was created.`,
+              action: {
+                label: "Open",
+                onClick: () => job.skillId !== undefined && navigate(`/skills/${job.skillId}`),
+              },
+            });
+            refresh();
+          }
+        } else if (job.status === "error") {
+          setGenJob(job);
+          if (!genOpen) {
+            toast.error("Skill generation failed", {
+              description: job.error ?? "Unknown error",
+            });
+          }
+        }
+      } catch {
+        // transient network error: keep polling
+      }
+    };
+    const timer = setInterval(tick, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [genJob, genOpen, navigate, refresh]);
+
+  async function handleGenerate(idea: string) {
+    setGenSubmitting(true);
+    try {
+      const created = await api.createGeneration(idea);
+      setGenJob({ id: created.id, status: "running", createdAt: "", updatedAt: "" });
+    } finally {
+      setGenSubmitting(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
@@ -41,9 +104,16 @@ export function SkillsPage() {
     <div className="grid gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Skills</h1>
-        <Button onClick={() => navigate("/skills/new")}>
-          <Plus /> New skill
-        </Button>
+        <div className="flex gap-2">
+          {llm?.enabled && (
+            <Button variant="outline" onClick={() => setGenOpen(true)}>
+              <Sparkles /> Generate
+            </Button>
+          )}
+          <Button onClick={() => navigate("/skills/new")}>
+            <Plus /> New skill
+          </Button>
+        </div>
       </div>
 
       {/* Search is always visible (AKB Design): the most common job here. */}
@@ -81,9 +151,16 @@ export function SkillsPage() {
             {query ? "Try a different query." : "Create your first skill to get started."}
           </p>
           {!query && (
-            <Button className="mt-4" onClick={() => navigate("/skills/new")}>
-              <Plus /> New skill
-            </Button>
+            <div className="mt-4 flex justify-center gap-2">
+              {llm?.enabled && (
+                <Button variant="outline" onClick={() => setGenOpen(true)}>
+                  <Sparkles /> Generate
+                </Button>
+              )}
+              <Button onClick={() => navigate("/skills/new")}>
+                <Plus /> New skill
+              </Button>
+            </div>
           )}
         </Card>
       )}
@@ -105,6 +182,21 @@ export function SkillsPage() {
           ))}
         </div>
       )}
+
+      <GenerateSkillDialog
+        open={genOpen}
+        onOpenChange={setGenOpen}
+        model={llm?.enabled ? llm.model : null}
+        job={genJob}
+        submitting={genSubmitting}
+        onSubmit={handleGenerate}
+        onReset={() => setGenJob(null)}
+        onViewSkill={(id) => {
+          setGenJob(null);
+          setGenOpen(false);
+          navigate(`/skills/${id}`);
+        }}
+      />
     </div>
   );
 }

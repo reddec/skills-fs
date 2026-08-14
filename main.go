@@ -29,6 +29,12 @@ type Config struct {
 
 	MountAuth string `name:"mount-auth" help:"Mount (/fs) auth: none|token." default:"none"`
 
+	LLM struct {
+		BaseURL string `name:"base-url" help:"OpenAI-compatible API base URL for skill generation." default:"https://api.deepseek.com/v1"`
+		APIKey  string `name:"api-key" help:"API key for skill generation. When set, the Generate feature is enabled."`
+		Model   string `name:"model" help:"Model used for skill generation." default:"deepseek-v4-flash"`
+	} `embed:"" prefix:"llm."`
+
 	OIDC struct {
 		Issuer       string `name:"issuer" help:"OIDC issuer URL."`
 		ClientID     string `name:"client-id" help:"OIDC client ID."`
@@ -81,6 +87,11 @@ func run(cfg Config) error {
 			ClientSecret: cfg.OIDC.ClientSecret,
 			ServerURL:    cfg.OIDC.ServerURL,
 			TrustProxy:   cfg.OIDC.TrustProxy,
+		},
+		LLM: server.LLMConfig{
+			BaseURL: cfg.LLM.BaseURL,
+			APIKey:  cfg.LLM.APIKey,
+			Model:   cfg.LLM.Model,
 		},
 	})
 	if err != nil {

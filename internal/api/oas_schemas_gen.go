@@ -4,6 +4,8 @@ package api
 
 import (
 	"time"
+
+	"github.com/go-faster/errors"
 )
 
 type CreateSkillBadRequest Error
@@ -39,10 +41,180 @@ func (s *Error) SetMessage(val string) {
 	s.Message = val
 }
 
-func (*Error) createTokenRes() {}
-func (*Error) deleteSkillRes() {}
-func (*Error) deleteTokenRes() {}
-func (*Error) getSkillRes()    {}
+func (*Error) createGenerationRes() {}
+func (*Error) createTokenRes()      {}
+func (*Error) deleteSkillRes()      {}
+func (*Error) deleteTokenRes()      {}
+func (*Error) getGenerationRes()    {}
+func (*Error) getSkillRes()         {}
+
+// Ref: #/components/schemas/Generation
+type Generation struct {
+	ID     string           `json:"id"`
+	Status GenerationStatus `json:"status"`
+	// Human-readable failure reason when status is error.
+	Error OptString `json:"error"`
+	// Created skill id when status is done.
+	SkillId OptInt64 `json:"skillId"`
+	// Created skill name when status is done.
+	SkillName OptString `json:"skillName"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// GetID returns the value of ID.
+func (s *Generation) GetID() string {
+	return s.ID
+}
+
+// GetStatus returns the value of Status.
+func (s *Generation) GetStatus() GenerationStatus {
+	return s.Status
+}
+
+// GetError returns the value of Error.
+func (s *Generation) GetError() OptString {
+	return s.Error
+}
+
+// GetSkillId returns the value of SkillId.
+func (s *Generation) GetSkillId() OptInt64 {
+	return s.SkillId
+}
+
+// GetSkillName returns the value of SkillName.
+func (s *Generation) GetSkillName() OptString {
+	return s.SkillName
+}
+
+// GetCreatedAt returns the value of CreatedAt.
+func (s *Generation) GetCreatedAt() time.Time {
+	return s.CreatedAt
+}
+
+// GetUpdatedAt returns the value of UpdatedAt.
+func (s *Generation) GetUpdatedAt() time.Time {
+	return s.UpdatedAt
+}
+
+// SetID sets the value of ID.
+func (s *Generation) SetID(val string) {
+	s.ID = val
+}
+
+// SetStatus sets the value of Status.
+func (s *Generation) SetStatus(val GenerationStatus) {
+	s.Status = val
+}
+
+// SetError sets the value of Error.
+func (s *Generation) SetError(val OptString) {
+	s.Error = val
+}
+
+// SetSkillId sets the value of SkillId.
+func (s *Generation) SetSkillId(val OptInt64) {
+	s.SkillId = val
+}
+
+// SetSkillName sets the value of SkillName.
+func (s *Generation) SetSkillName(val OptString) {
+	s.SkillName = val
+}
+
+// SetCreatedAt sets the value of CreatedAt.
+func (s *Generation) SetCreatedAt(val time.Time) {
+	s.CreatedAt = val
+}
+
+// SetUpdatedAt sets the value of UpdatedAt.
+func (s *Generation) SetUpdatedAt(val time.Time) {
+	s.UpdatedAt = val
+}
+
+func (*Generation) getGenerationRes() {}
+
+// Ref: #/components/schemas/GenerationCreated
+type GenerationCreated struct {
+	// Generation job id, usable with GET /generate/{id}.
+	ID string `json:"id"`
+}
+
+// GetID returns the value of ID.
+func (s *GenerationCreated) GetID() string {
+	return s.ID
+}
+
+// SetID sets the value of ID.
+func (s *GenerationCreated) SetID(val string) {
+	s.ID = val
+}
+
+func (*GenerationCreated) createGenerationRes() {}
+
+type GenerationStatus string
+
+const (
+	GenerationStatusRunning GenerationStatus = "running"
+	GenerationStatusDone    GenerationStatus = "done"
+	GenerationStatusError   GenerationStatus = "error"
+)
+
+// AllValues returns all GenerationStatus values.
+func (GenerationStatus) AllValues() []GenerationStatus {
+	return []GenerationStatus{
+		GenerationStatusRunning,
+		GenerationStatusDone,
+		GenerationStatusError,
+	}
+}
+
+// MarshalText implements encoding.TextMarshaler.
+func (s GenerationStatus) MarshalText() ([]byte, error) {
+	switch s {
+	case GenerationStatusRunning:
+		return []byte(s), nil
+	case GenerationStatusDone:
+		return []byte(s), nil
+	case GenerationStatusError:
+		return []byte(s), nil
+	default:
+		return nil, errors.Errorf("invalid value: %q", s)
+	}
+}
+
+// UnmarshalText implements encoding.TextUnmarshaler.
+func (s *GenerationStatus) UnmarshalText(data []byte) error {
+	switch GenerationStatus(data) {
+	case GenerationStatusRunning:
+		*s = GenerationStatusRunning
+		return nil
+	case GenerationStatusDone:
+		*s = GenerationStatusDone
+		return nil
+	case GenerationStatusError:
+		*s = GenerationStatusError
+		return nil
+	default:
+		return errors.Errorf("invalid value: %q", data)
+	}
+}
+
+// Ref: #/components/schemas/GenerationWrite
+type GenerationWrite struct {
+	// Raw idea or draft to turn into a skill.
+	Idea string `json:"idea"`
+}
+
+// GetIdea returns the value of Idea.
+func (s *GenerationWrite) GetIdea() string {
+	return s.Idea
+}
+
+// SetIdea sets the value of Idea.
+func (s *GenerationWrite) SetIdea(val string) {
+	s.Idea = val
+}
 
 // Arbitrary string key-value metadata (SKILL.md frontmatter).
 // Ref: #/components/schemas/Metadata
@@ -96,6 +268,52 @@ func (o NilDateTime) Get() (v time.Time, ok bool) {
 
 // Or returns value if set, or given parameter if does not.
 func (o NilDateTime) Or(d time.Time) time.Time {
+	if v, ok := o.Get(); ok {
+		return v
+	}
+	return d
+}
+
+// NewOptInt64 returns new OptInt64 with value set to v.
+func NewOptInt64(v int64) OptInt64 {
+	return OptInt64{
+		Value: v,
+		Set:   true,
+	}
+}
+
+// OptInt64 is optional int64.
+type OptInt64 struct {
+	Value int64
+	Set   bool
+}
+
+// IsSet returns true if OptInt64 was set.
+func (o OptInt64) IsSet() bool { return o.Set }
+
+// Reset unsets value.
+func (o *OptInt64) Reset() {
+	var v int64
+	o.Value = v
+	o.Set = false
+}
+
+// SetTo sets value to v.
+func (o *OptInt64) SetTo(v int64) {
+	o.Set = true
+	o.Value = v
+}
+
+// Get returns value and boolean that denotes whether value was set.
+func (o OptInt64) Get() (v int64, ok bool) {
+	if !o.Set {
+		return v, false
+	}
+	return o.Value, true
+}
+
+// Or returns value if set, or given parameter if does not.
+func (o OptInt64) Or(d int64) int64 {
 	if v, ok := o.Get(); ok {
 		return v
 	}
@@ -192,6 +410,48 @@ func (o OptString) Or(d string) string {
 		return v
 	}
 	return d
+}
+
+// Ref: #/components/schemas/ServerConfig
+type ServerConfig struct {
+	Llm ServerConfigLlm `json:"llm"`
+}
+
+// GetLlm returns the value of Llm.
+func (s *ServerConfig) GetLlm() ServerConfigLlm {
+	return s.Llm
+}
+
+// SetLlm sets the value of Llm.
+func (s *ServerConfig) SetLlm(val ServerConfigLlm) {
+	s.Llm = val
+}
+
+type ServerConfigLlm struct {
+	// Whether agent-based skill generation is configured (LLM API key set at startup).
+	Enabled bool `json:"enabled"`
+	// Model used for generation.
+	Model string `json:"model"`
+}
+
+// GetEnabled returns the value of Enabled.
+func (s *ServerConfigLlm) GetEnabled() bool {
+	return s.Enabled
+}
+
+// GetModel returns the value of Model.
+func (s *ServerConfigLlm) GetModel() string {
+	return s.Model
+}
+
+// SetEnabled sets the value of Enabled.
+func (s *ServerConfigLlm) SetEnabled(val bool) {
+	s.Enabled = val
+}
+
+// SetModel sets the value of Model.
+func (s *ServerConfigLlm) SetModel(val string) {
+	s.Model = val
 }
 
 // Merged schema.

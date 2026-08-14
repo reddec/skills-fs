@@ -77,6 +77,51 @@ paths:
         '204':
           description: Deleted.
         '404': { $ref: '#/components/responses/NotFound' }
+  /config:
+    get:
+      operationId: getConfig
+      tags: [meta]
+      description: Non-secret server configuration, e.g. whether skill generation is enabled.
+      responses:
+        '200':
+          description: Server configuration.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServerConfig' }
+  /generate:
+    post:
+      operationId: createGeneration
+      tags: [generate]
+      description: >-
+        Start asynchronous skill generation from a raw idea. The job runs in the
+        background; poll GET /generate/{id} for the result. Disabled unless the
+        LLM API key is configured at startup.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenerationWrite' }
+      responses:
+        '202':
+          description: Generation job accepted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GenerationCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /generate/{id}:
+    parameters:
+      - $ref: '#/components/parameters/GenerationID'
+    get:
+      operationId: getGeneration
+      tags: [generate]
+      description: Get the state of a generation job.
+      responses:
+        '200':
+          description: Job state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Generation' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /tokens:
     get:
       operationId: listTokens
@@ -129,6 +174,11 @@ components:
       in: path
       required: true
       schema: { type: integer, format: int64 }
+    GenerationID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
   responses:
     BadRequest:
       description: Malformed or invalid request.
@@ -219,3 +269,53 @@ components:
       required: [label]
       properties:
         label: { type: string }
+    ServerConfig:
+      type: object
+      required: [llm]
+      properties:
+        llm:
+          type: object
+          required: [enabled, model]
+          properties:
+            enabled:
+              type: boolean
+              description: Whether agent-based skill generation is configured (LLM API key set at startup).
+            model:
+              type: string
+              description: Model used for generation.
+    GenerationWrite:
+      type: object
+      required: [idea]
+      properties:
+        idea:
+          type: string
+          minLength: 1
+          maxLength: 20000
+          description: Raw idea or draft to turn into a skill.
+    GenerationCreated:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: Generation job id, usable with GET /generate/{id}.
+    Generation:
+      type: object
+      required: [id, status, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        status:
+          type: string
+          enum: [running, done, error]
+        error:
+          type: string
+          description: Human-readable failure reason when status is error.
+        skillId:
+          type: integer
+          format: int64
+          description: Created skill id when status is done.
+        skillName:
+          type: string
+          description: Created skill name when status is done.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }

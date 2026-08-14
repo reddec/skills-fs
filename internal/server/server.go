@@ -12,6 +12,7 @@ import (
 	"github.com/NYTimes/gziphandler"
 	"github.com/reddec/skills-fs/internal/api"
 	"github.com/reddec/skills-fs/internal/dbo"
+	"github.com/reddec/skills-fs/internal/generate"
 	"github.com/reddec/skills-fs/internal/web"
 )
 
@@ -49,6 +50,16 @@ type Config struct {
 	MountAuth MountAuth
 
 	OIDC OIDCConfig
+
+	LLM LLMConfig
+}
+
+// LLMConfig configures the optional agent-based skill generation feature. It is enabled
+// when APIKey is set.
+type LLMConfig struct {
+	BaseURL string
+	APIKey  string
+	Model   string
 }
 
 // OIDCConfig configures OpenID Connect when AdminAuth is AdminOIDC.
@@ -62,7 +73,8 @@ type OIDCConfig struct {
 
 // Server implements the ogen-generated api.Handler against the database.
 type Server struct {
-	q *dbo.Queries
+	q   *dbo.Queries
+	gen *generate.Generator
 }
 
 // New builds the root handler: /api/v1 (admin auth), / (admin auth, SPA), /fs (mount auth).
@@ -71,7 +83,14 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 		return nil, err
 	}
 
-	svc := &Server{q: cfg.DB}
+	svc := &Server{
+		q: cfg.DB,
+		gen: generate.New(generate.Config{
+			BaseURL: cfg.LLM.BaseURL,
+			APIKey:  cfg.LLM.APIKey,
+			Model:   cfg.LLM.Model,
+		}, cfg.DB),
+	}
 	apiServer, err := api.NewServer(svc)
 	if err != nil {
 		return nil, fmt.Errorf("create api server: %w", err)

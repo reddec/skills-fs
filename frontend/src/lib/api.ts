@@ -41,6 +41,29 @@ export interface TokenCreated extends Token {
   token: string;
 }
 
+export interface ServerConfig {
+  llm: {
+    enabled: boolean;
+    model: string;
+  };
+}
+
+export type GenerationStatus = "running" | "done" | "error";
+
+export interface Generation {
+  id: string;
+  status: GenerationStatus;
+  error?: string;
+  skillId?: number;
+  skillName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GenerationCreated {
+  id: string;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const resp = await fetch(BASE + path, {
     ...init,
@@ -65,4 +88,8 @@ export const api = {
   listTokens: () => request<Token[]>("/tokens"),
   createToken: (label: string) => request<TokenCreated>("/tokens", { method: "POST", body: JSON.stringify({ label }) }),
   deleteToken: (id: number) => request<void>(`/tokens/${id}`, { method: "DELETE" }),
+
+  getConfig: () => request<ServerConfig>("/config"),
+  createGeneration: (idea: string) => request<GenerationCreated>("/generate", { method: "POST", body: JSON.stringify({ idea }) }),
+  getGeneration: (id: string) => request<Generation>(`/generate/${id}`),
 };
