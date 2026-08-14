@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { cn } from "./lib/utils";
 import { SkillsPage } from "./pages/Skills";
 import { SkillDetailPage } from "./pages/SkillDetail";
@@ -8,10 +8,12 @@ import { SetupPage } from "./pages/Setup";
 
 // The editor pulls in CodeMirror; load it only on the editor route to keep the app bundle lean.
 const SkillEditorPage = lazy(() => import("./pages/SkillEditor").then((m) => ({ default: m.SkillEditorPage })));
-
 const editorFallback = <div className="text-sm text-muted-foreground">Loading editor…</div>;
 
 export default function App() {
+  const { pathname } = useLocation();
+  const fullWidth = pathname.endsWith("/edit") || pathname === "/skills/new";
+  const mainClass = fullWidth ? "px-4 py-6" : "mx-auto max-w-6xl px-4 py-6";
   return (
     <div className="min-h-screen">
       <header className="border-b bg-background">
@@ -30,7 +32,7 @@ export default function App() {
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className={mainClass}>
         <Routes>
           <Route path="/" element={<Navigate to="/skills" replace />} />
           <Route path="/skills" element={<SkillsPage />} />
