@@ -71,3 +71,53 @@
     transition-duration: 0.001ms !important;
   }
 }
+
+/* highlight.js token colors (One Dark) for the Bash code blocks. */
+.hljs {
+  color: #abb2bf;
+  background: transparent;
+}
+.hljs-comment,
+.hljs-quote {
+  color: #5c6370;
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link {
+  color: #c678dd;
+}
+.hljs-string,
+.hljs-attr,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+  color: #98c379;
+}
+.hljs-title,
+.hljs-name,
+.hljs-type,
+.hljs-attribute {
+  color: #61afef;
+}
+.hljs-number,
+.hljs-meta,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type {
+  color: #d19a66;
+}
+.hljs-template-variable,
+.hljs-variable,
+.hljs-deletion {
+  color: #e06c75;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
