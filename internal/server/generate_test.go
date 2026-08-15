@@ -150,7 +150,8 @@ func TestGenerateSkillEndToEnd(t *testing.T) {
 	assert.Contains(t, sk.Body, "Conventional commits")
 
 	// And it is served on the mount.
-	resp, err = ts.Client().Get(ts.URL + "/fs/generated-skill/SKILL.md")
+	token := createToken(t, ts, "e2e")
+	resp, err = ts.Client().Do(mountRequest(t, ts, token, "/fs/generated-skill/SKILL.md"))
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -159,8 +160,17 @@ func TestGenerateSkillEndToEnd(t *testing.T) {
 	assert.Contains(t, string(raw), "# Conventional commits")
 }
 
+// mountRequest builds a token-authenticated GET against the /fs mount.
+func mountRequest(t *testing.T, ts *httptest.Server, token, path string) *http.Request {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, ts.URL+path, nil)
+	require.NoError(t, err)
+	req.SetBasicAuth("ignored", token)
+	return req
+}
+
 func TestGenerateDisabled(t *testing.T) {
-	ts, _ := newServer(t, "none")
+	ts, _ := newServer(t)
 
 	resp := postJSON(t, ts.Client(), ts.URL+"/api/v1/generate", `{"idea":"whatever"}`)
 	defer resp.Body.Close()
@@ -180,7 +190,7 @@ func TestGenerateDisabled(t *testing.T) {
 }
 
 func TestGetGenerationNotFound(t *testing.T) {
-	ts, _ := newServer(t, "none")
+	ts, _ := newServer(t)
 	resp, err := ts.Client().Get(ts.URL + "/api/v1/generate/does-not-exist")
 	require.NoError(t, err)
 	defer resp.Body.Close()

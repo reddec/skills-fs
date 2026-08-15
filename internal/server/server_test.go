@@ -19,18 +19,43 @@ import (
 )
 
 // newServer builds a full-wiring handler backed by an isolated temp-file SQLite database.
-func newServer(t *testing.T, mountAuth string) (*httptest.Server, *dbo.Queries) {
+// The admin auth is none (test context); the mount is always token-protected.
+func newServer(t *testing.T) (*httptest.Server, *dbo.Queries) {
 	t.Helper()
 	q, err := dbo.NewFromFile(filepath.Join(t.TempDir(), "test.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = q.Close() })
 
-	handler, err := server.New(context.Background(), server.Config{DB: q, MountAuth: server.MountAuth(mountAuth)})
+	handler, err := server.New(context.Background(), server.Config{DB: q})
 	require.NoError(t, err)
 
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
 	return ts, q
+}
+
+// createToken issues a mount token through the admin API and returns its plaintext.
+func createToken(t *testing.T, ts *httptest.Server, label string) string {
+	t.Helper()
+	resp := postJSON(t, ts.Client(), ts.URL+"/api/v1/tokens", `{"label":"`+label+`"}`)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+	var created api.TokenCreated
+	require.NoError(t, decodeJSON(resp.Body, &created))
+	require.NotEmpty(t, created.Token)
+	return created.Token
+}
+
+// getFS fetches a /fs path authenticated with a mount token (basic-auth password).
+func getFS(t *testing.T, ts *httptest.Server, token, path string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, ts.URL+path, nil)
+	require.NoError(t, err)
+	req.SetBasicAuth("ignored", token)
+	resp, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	return resp
 }
 
 func postJSON(t *testing.T, client *http.Client, url, body string) *http.Response {
@@ -55,7 +80,7 @@ func createSkill(t *testing.T, ts *httptest.Server, body string) api.Skill {
 }
 
 func TestCreateAndGetSkill(t *testing.T) {
-	ts, _ := newServer(t, "none")
+	ts, _ := newServer(t)
 	created := createSkill(t, ts, `{"name":"code-review","description":"Review Go code.","body":"# Hi"}`)
 	assert.Equal(t, "code-review", created.Name)
 	assert.Equal(t, "# Hi", created.Body)
@@ -71,7 +96,7 @@ func TestCreateAndGetSkill(t *testing.T) {
 }
 
 func TestListSkills(t *testing.T) {
-	ts, _ := newServer(t, "none")
+	ts, _ := newServer(t)
 	createSkill(t, ts, `{"name":"alpha","description":"d","body":"a"}`)
 	createSkill(t, ts, `{"name":"beta","description":"d","body":"b"}`)
 
@@ -86,7 +111,7 @@ func TestListSkills(t *testing.T) {
 }
 
 func TestUpdateSkill(t *testing.T) {
-	ts, _ := newServer(t, "none")
+	ts, _ := newServer(t)
 	sk := createSkill(t, ts, `{"name":"to-update","description":"d","body":"old"}`)
 
 	req, _ := http.NewRequest(http.MethodPut, ts.URL+"/api/v1/skills/"+strconv.FormatInt(sk.ID, 10), strings.NewReader(
@@ -103,7 +128,7 @@ func TestUpdateSkill(t *testing.T) {
 }
 
 func TestDeleteSkill(t *testing.T) {
-	ts, _ := newServer(t, "none")
+	ts, _ := newServer(t)
 	sk := createSkill(t, ts, `{"name":"doomed","description":"d","body":"x"}`)
 
 	req, _ := http.NewRequest(http.MethodDelete, ts.URL+"/api/v1/skills/"+strconv.FormatInt(sk.ID, 10), nil)
@@ -121,7 +146,7 @@ func TestDeleteSkill(t *testing.T) {
 }
 
 func TestCreateDuplicateName(t *testing.T) {
-	ts, _ := newServer(t, "none")
+	ts, _ := newServer(t)
 	createSkill(t, ts, `{"name":"dup","description":"d","body":"x"}`)
 	resp := postJSON(t, ts.Client(), ts.URL+"/api/v1/skills", `{"name":"dup","description":"d","body":"x"}`)
 	defer resp.Body.Close()
@@ -129,7 +154,7 @@ func TestCreateDuplicateName(t *testing.T) {
 }
 
 func TestCreateInvalidName(t *testing.T) {
-	ts, _ := newServer(t, "none")
+	ts, _ := newServer(t)
 	for _, body := range []string{
 		`{"name":"Bad_Case","description":"d","body":"x"}`,
 		`{"name":"-leading","description":"d","body":"x"}`,
@@ -142,7 +167,7 @@ func TestCreateInvalidName(t *testing.T) {
 }
 
 func TestGetMissingSkill(t *testing.T) {
-	ts, _ := newServer(t, "none")
+	ts, _ := newServer(t)
 	resp, err := ts.Client().Get(ts.URL + "/api/v1/skills/9999")
 	require.NoError(t, err)
 	resp.Body.Close()
@@ -150,15 +175,8 @@ func TestGetMissingSkill(t *testing.T) {
 }
 
 func TestTokenMountAuth(t *testing.T) {
-	ts, _ := newServer(t, "token")
-
-	// Tokens are created through the (unauthenticated, in test) admin API.
-	resp := postJSON(t, ts.Client(), ts.URL+"/api/v1/tokens", `{"label":"laptop"}`)
-	defer resp.Body.Close()
-	require.Equal(t, http.StatusCreated, resp.StatusCode)
-	var created api.TokenCreated
-	require.NoError(t, decodeJSON(resp.Body, &created))
-	require.NotEmpty(t, created.Token)
+	ts, _ := newServer(t)
+	token := createToken(t, ts, "laptop")
 
 	// No credentials -> 401.
 	noAuth, err := ts.Client().Get(ts.URL + "/fs/")
@@ -167,48 +185,100 @@ func TestTokenMountAuth(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, noAuth.StatusCode)
 
 	// Valid token as basic-auth password (username ignored) -> 200.
-	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/fs/", nil)
-	req.SetBasicAuth("ignored", created.Token)
+	ok := getFS(t, ts, token, "/fs/")
+	assert.Equal(t, http.StatusOK, ok.StatusCode)
+
+	// Wrong token -> 401.
+	bad := getFS(t, ts, "sk_wrong", "/fs/")
+	assert.Equal(t, http.StatusUnauthorized, bad.StatusCode)
+}
+
+func TestMountAuthThrottle(t *testing.T) {
+	ts, _ := newServer(t)
+
+	// authFailureLimit wrong tokens stay 401; the next one is throttled to 429.
+	for i := range 10 {
+		resp := getFS(t, ts, "sk_wrong", "/fs/")
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "attempt %d", i)
+	}
+	throttled := getFS(t, ts, "sk_wrong", "/fs/")
+	assert.Equal(t, http.StatusTooManyRequests, throttled.StatusCode)
+
+	// Throttling applies to the IP, not the credential: even a valid token is rejected.
+	token := createToken(t, ts, "late")
+	blocked := getFS(t, ts, token, "/fs/")
+	assert.Equal(t, http.StatusTooManyRequests, blocked.StatusCode)
+}
+
+func TestBasicAuthRequiresCredentials(t *testing.T) {
+	q, err := dbo.NewFromFile(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = q.Close() })
+
+	// Empty password must be rejected at startup (auth bypass), empty user likewise.
+	_, err = server.New(context.Background(), server.Config{DB: q, AdminAuth: server.AdminBasic})
+	require.ErrorIs(t, err, server.ErrInvalidAuthMode)
+
+	_, err = server.New(context.Background(), server.Config{DB: q, AdminAuth: server.AdminBasic, AdminUser: "admin"})
+	require.ErrorIs(t, err, server.ErrInvalidAuthMode)
+
+	_, err = server.New(context.Background(), server.Config{DB: q, AdminAuth: server.AdminBasic, AdminUser: "admin", AdminPassword: "hunter2"})
+	require.NoError(t, err)
+}
+
+func TestBasicAuthMount(t *testing.T) {
+	q, err := dbo.NewFromFile(filepath.Join(t.TempDir(), "test.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = q.Close() })
+
+	handler, err := server.New(context.Background(), server.Config{
+		DB:            q,
+		AdminAuth:     server.AdminBasic,
+		AdminUser:     "admin",
+		AdminPassword: "hunter2",
+	})
+	require.NoError(t, err)
+	ts := httptest.NewServer(handler)
+	t.Cleanup(ts.Close)
+
+	// Empty password (the old bypass) -> 401.
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/skills", nil)
+	req.SetBasicAuth("admin", "")
+	empty, err := ts.Client().Do(req)
+	require.NoError(t, err)
+	empty.Body.Close()
+	assert.Equal(t, http.StatusUnauthorized, empty.StatusCode)
+
+	// Valid credentials -> 200.
+	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/api/v1/skills", nil)
+	req.SetBasicAuth("admin", "hunter2")
 	ok, err := ts.Client().Do(req)
 	require.NoError(t, err)
 	ok.Body.Close()
 	assert.Equal(t, http.StatusOK, ok.StatusCode)
-
-	// Wrong token -> 401.
-	req, _ = http.NewRequest(http.MethodGet, ts.URL+"/fs/", nil)
-	req.SetBasicAuth("ignored", "sk_wrong")
-	bad, err := ts.Client().Do(req)
-	require.NoError(t, err)
-	bad.Body.Close()
-	assert.Equal(t, http.StatusUnauthorized, bad.StatusCode)
 }
 
 func TestFSListingAndRange(t *testing.T) {
-	ts, _ := newServer(t, "none")
+	ts, _ := newServer(t)
+	token := createToken(t, ts, "fs")
 	createSkill(t, ts, `{"name":"code-review","description":"Review Go code.","body":"# Body line one\n# Body line two"}`)
 
 	// Root listing: one directory per skill.
-	root, err := ts.Client().Get(ts.URL + "/fs/")
-	require.NoError(t, err)
-	body, _ := io.ReadAll(root.Body)
-	root.Body.Close()
+	root := getFS(t, ts, token, "/fs/")
+	rootBody, _ := io.ReadAll(root.Body)
 	assert.Equal(t, http.StatusOK, root.StatusCode)
-	assert.Contains(t, string(body), `<a href="code-review/">code-review/</a>`)
+	assert.Contains(t, string(rootBody), `<a href="code-review/">code-review/</a>`)
 	assert.Equal(t, "no-store", root.Header.Get("Cache-Control"))
 
 	// Skill directory lists SKILL.md.
-	dir, err := ts.Client().Get(ts.URL + "/fs/code-review/")
-	require.NoError(t, err)
+	dir := getFS(t, ts, token, "/fs/code-review/")
 	dirBody, _ := io.ReadAll(dir.Body)
-	dir.Body.Close()
 	assert.Equal(t, http.StatusOK, dir.StatusCode)
 	assert.Contains(t, string(dirBody), `<a href="SKILL.md">SKILL.md</a>`)
 
 	// SKILL.md has valid frontmatter + body and advertises Range support.
-	file, err := ts.Client().Get(ts.URL + "/fs/code-review/SKILL.md")
-	require.NoError(t, err)
+	file := getFS(t, ts, token, "/fs/code-review/SKILL.md")
 	fileBody, _ := io.ReadAll(file.Body)
-	file.Body.Close()
 	assert.Equal(t, http.StatusOK, file.StatusCode)
 	assert.Equal(t, "bytes", file.Header.Get("Accept-Ranges"))
 	assert.True(t, strings.HasPrefix(string(fileBody), "---\n"), string(fileBody))
@@ -217,6 +287,7 @@ func TestFSListingAndRange(t *testing.T) {
 
 	// Range request -> 206 partial content.
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/fs/code-review/SKILL.md", nil)
+	req.SetBasicAuth("ignored", token)
 	req.Header.Set("Range", "bytes=0-9")
 	rng, err := ts.Client().Do(req)
 	require.NoError(t, err)

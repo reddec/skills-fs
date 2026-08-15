@@ -14,10 +14,9 @@ Flags map to `SKILLSFS_*` env vars (e.g. `--bind` → `SKILLSFS_BIND`).
 | `--bind` / `SKILLSFS_BIND` | `:8080` | Bind address. |
 | `--db` / `SKILLSFS_DB` | `skills.db` | SQLite path (`file::memory:` for ephemeral). |
 | `--debug` / `SKILLSFS_DEBUG` | off | Debug logging. |
-| `--admin-auth` / `SKILLSFS_ADMIN_AUTH` | `none` | Admin auth: `none`, `basic`, `oidc`. |
+| `--admin-auth` / `SKILLSFS_ADMIN_AUTH` | `none` | Admin auth: `none` (local use), `basic`, `oidc`. A warning is logged if `none` is reachable from the network. |
 | `--admin-user` / `SKILLSFS_ADMIN_USER` | `admin` | Basic-auth username. |
-| `--admin-password` | _(flag only)_ | Basic-auth password (not exposed as env). |
-| `--mount-auth` / `SKILLSFS_MOUNT_AUTH` | `none` | `/fs` auth: `none`, `token`. |
+| `--admin-password` | _(flag only)_ | Basic-auth password (not exposed as env; required when `--admin-auth basic`). |
 | `--oidc.issuer` / `SKILLSFS_OIDC_ISSUER` | | OIDC issuer URL (admin-auth=oidc). |
 | `--oidc.client-id` / `SKILLSFS_OIDC_CLIENT_ID` | | OIDC client ID. |
 | `--oidc.client-secret` / `SKILLSFS_OIDC_CLIENT_SECRET` | | OIDC client secret. |
@@ -30,7 +29,9 @@ Flags map to `SKILLSFS_*` env vars (e.g. `--bind` → `SKILLSFS_BIND`).
 | `--llm.api-key` / `SKILLSFS_LLM_API_KEY` | | API key; when set, the **Generate** button appears in the UI. |
 | `--llm.model` / `SKILLSFS_LLM_MODEL` | `deepseek-v4-flash` | Model used for skill generation. |
 
-Routes: `/` admin SPA + `/api/v1` admin API; `/fs/` read-only filesystem.
+Routes: `/` admin SPA + `/api/v1` admin API; `/fs/` read-only filesystem, **always
+token-protected** — issue a mount token on the Tokens page (or via `POST /api/v1/tokens`).
+Repeated failed auth attempts from one IP are throttled.
 
 ## Generating skills (optional)
 
@@ -70,7 +71,7 @@ make build    # go build
 The read-only `/fs/` is consumed by [rclone](https://rclone.org/http/) (single static binary,
 all platforms). The admin UI's **Mount** page generates copy-paste install + mount scripts per
 OS (incl. systemd/launchd auto-start) and per agent target (`~/.agents/skills`, `~/.claude/skills`).
-If `--mount-auth token`, issue a token there first — it is filled into the commands. Quick form:
+Mounts require a token: issue one there first (or on the Tokens page) — it is filled into the commands. Quick form:
 
 ```bash
 rclone mount :http: ~/.agents/skills --http-url 'https://skills:<TOKEN>@skills.example/fs/' \

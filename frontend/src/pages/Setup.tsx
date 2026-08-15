@@ -46,8 +46,9 @@ function windowsMount(target: Target): string {
   return target === "agentic" ? `%USERPROFILE%\\.agents\\skills` : `%USERPROFILE%\\.claude\\skills`;
 }
 
-// url embeds the token (if any) as basic-auth credentials the server already accepts.
-function buildURL(token: string): string {
+// url embeds the token as basic-auth credentials the server requires; the no-token form is
+// only a preview placeholder.
+function buildURL(token: string) {
   const base = ORIGIN + "/fs/";
   return token ? ORIGIN.replace("://", `://skills:${token}@`) + "/fs/" : base;
 }
@@ -219,7 +220,7 @@ export function SetupPage() {
                 Using <span className="font-mono">{prefix}…</span> — revoke it on the Tokens page.
               </>
             ) : (
-              <>Create a token to auto-fill the commands below, or get one from the Tokens page.</>
+              <>A mount token is required. Create one to fill it into the commands below, or use one from the Tokens page.</>
             )}
           </p>
         </div>

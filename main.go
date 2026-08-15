@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os/signal"
 	"sync"
@@ -26,8 +27,6 @@ type Config struct {
 	AdminAuth     string `name:"admin-auth" help:"Admin auth: none|basic|oidc." default:"none"`
 	AdminUser     string `name:"admin-user" help:"Admin username (basic auth)." default:"admin"`
 	AdminPassword string `name:"admin-password" help:"Admin password (basic auth)." env:"-"`
-
-	MountAuth string `name:"mount-auth" help:"Mount (/fs) auth: none|token." default:"none"`
 
 	LLM struct {
 		BaseURL string `name:"base-url" help:"OpenAI-compatible API base URL for skill generation." default:"https://api.deepseek.com/v1"`
@@ -74,13 +73,11 @@ func run(cfg Config) error {
 		return err
 	}
 	defer db.Close()
-
 	handler, err := server.New(ctx, server.Config{
 		DB:            db,
 		AdminAuth:     server.AdminAuth(cfg.AdminAuth),
 		AdminUser:     cfg.AdminUser,
 		AdminPassword: cfg.AdminPassword,
-		MountAuth:     server.MountAuth(cfg.MountAuth),
 		OIDC: server.OIDCConfig{
 			Issuer:       cfg.OIDC.Issuer,
 			ClientID:     cfg.OIDC.ClientID,
@@ -96,6 +93,10 @@ func run(cfg Config) error {
 	})
 	if err != nil {
 		return err
+	}
+
+	if (cfg.AdminAuth == "" || cfg.AdminAuth == "none") && !loopbackBind(cfg.Bind) {
+		slog.Warn("admin panel and API are UNAUTHENTICATED and reachable from the network; set --admin-auth basic|oidc or bind to loopback")
 	}
 
 	handler = securityHeaders(handler, cfg.TLS.Enabled)
@@ -137,6 +138,20 @@ func run(cfg Config) error {
 	return nil
 }
 
+// contentSecurityPolicy restricts the SPA to same-origin resources. Script loading is
+// fully strict; style-src additionally allows 'unsafe-inline' because component libraries
+// (Radix, sonner) inject <style> tags at runtime.
+const contentSecurityPolicy = "default-src 'self'; " +
+	"script-src 'self'; " +
+	"style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' data:; " +
+	"connect-src 'self'; " +
+	"font-src 'self'; " +
+	"frame-ancestors 'none'; " +
+	"form-action 'self'; " +
+	"base-uri 'self'; " +
+	"object-src 'none'"
+
 // securityHeaders adds a baseline set of OWASP response headers; HSTS is added only under TLS.
 func securityHeaders(next http.Handler, tls bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -146,11 +161,26 @@ func securityHeaders(next http.Handler, tls bool) http.Handler {
 		h.Set("X-XSS-Protection", "0")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		h.Set("Content-Security-Policy", contentSecurityPolicy)
 		if tls || r.TLS != nil {
 			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// loopbackBind reports whether the bind address restricts serving to the local host
+// (empty host means all interfaces and is therefore public).
+func loopbackBind(bind string) bool {
+	host, _, err := net.SplitHostPort(bind)
+	if err != nil {
+		host = bind
+	}
+	if host == "" {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return host == "localhost" || (ip != nil && ip.IsLoopback())
 }
 
 const (

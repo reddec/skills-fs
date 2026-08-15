@@ -16,38 +16,30 @@ import (
 	"github.com/reddec/skills-fs/internal/web"
 )
 
-// ErrInvalidAuthMode signals an unrecognized admin or mount authentication mode at startup.
+// ErrInvalidAuthMode signals an unrecognized or incomplete authentication configuration
+// at startup.
 var ErrInvalidAuthMode = errors.New("invalid auth mode")
 
 //nolint:gochecknoglobals // package-level logger is the project convention
 var logger = slog.Default().With("controller", "server")
 
-// AdminAuth selects how the admin panel and API are protected.
+// AdminAuth selects how the admin panel and API are protected. The /fs mount is always
+// token-protected and needs no selector.
 type AdminAuth string
 
+// AdminAuth values: none (local-only use), basic, oidc. See validateAdminAuth.
 const (
 	AdminNone  AdminAuth = "none"
 	AdminBasic AdminAuth = "basic"
 	AdminOIDC  AdminAuth = "oidc"
 )
 
-// MountAuth selects how the read-only /fs mount is protected.
-type MountAuth string
-
-const (
-	MountNone  MountAuth = "none"
-	MountToken MountAuth = "token"
-)
-
-// Config carries the dependencies and authentication settings assembled by main.
 type Config struct {
 	DB *dbo.Queries
 
 	AdminAuth     AdminAuth
 	AdminUser     string
 	AdminPassword string
-
-	MountAuth MountAuth
 
 	OIDC OIDCConfig
 
@@ -77,9 +69,9 @@ type Server struct {
 	gen *generate.Generator
 }
 
-// New builds the root handler: /api/v1 (admin auth), / (admin auth, SPA), /fs (mount auth).
+// New builds the root handler: /api/v1 (admin auth), / (admin auth, SPA), /fs (token auth).
 func New(ctx context.Context, cfg Config) (http.Handler, error) {
-	if err := validateAuthModes(cfg); err != nil {
+	if err := validateAdminAuth(cfg); err != nil {
 		return nil, err
 	}
 
@@ -108,7 +100,7 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	// (206) partial responses that HTTP clients like rclone rely on.
 	adminHandler = gziphandler.GzipHandler(adminHandler)
 
-	mountHandler := wrapMount(http.StripPrefix("/fs", newHTTPFS(cfg.DB)), cfg)
+	mountHandler := tokenAuth(cfg.DB)(http.StripPrefix("/fs", newHTTPFS(cfg.DB)))
 
 	root := http.NewServeMux()
 	root.Handle("/fs/", mountHandler)
@@ -116,16 +108,16 @@ func New(ctx context.Context, cfg Config) (http.Handler, error) {
 	return root, nil
 }
 
-func validateAuthModes(cfg Config) error {
+func validateAdminAuth(cfg Config) error {
 	switch cfg.AdminAuth {
-	case AdminNone, "", AdminBasic, AdminOIDC:
+	case AdminNone, "":
+	case AdminBasic:
+		if cfg.AdminUser == "" || cfg.AdminPassword == "" {
+			return fmt.Errorf("%w: basic auth requires --admin-user and --admin-password", ErrInvalidAuthMode)
+		}
+	case AdminOIDC:
 	default:
 		return fmt.Errorf("%w: admin auth %q", ErrInvalidAuthMode, cfg.AdminAuth)
-	}
-	switch cfg.MountAuth {
-	case MountNone, "", MountToken:
-	default:
-		return fmt.Errorf("%w: mount auth %q", ErrInvalidAuthMode, cfg.MountAuth)
 	}
 	return nil
 }

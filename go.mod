@@ -1,6 +1,6 @@
 module github.com/reddec/skills-fs
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/NYTimes/gziphandler v1.1.1
