@@ -11,6 +11,7 @@ import (
 	"embed"
 	"fmt"
 	"io"
+	"strings"
 
 	migrate "github.com/rubenv/sql-migrate"
 	_ "modernc.org/sqlite" // register the pure-Go SQLite driver as "sqlite"
@@ -22,9 +23,15 @@ import (
 var migrations embed.FS
 
 // NewFromFile opens the SQLite database at file, runs pending migrations, and returns a
-// Queries bound to a single writer connection (SQLite serializes writes).
+// Queries bound to a single writer connection (SQLite serializes writes). A file already
+// in URI form (leading "file:", e.g. "file::memory:" for an ephemeral database) is used
+// as-is, so the URI is not double-prefixed into a literal path.
 func NewFromFile(file string) (*Queries, error) {
-	dsn := fmt.Sprintf("file:%s?_journal_mode=WAL&cache=shared&_pragma=foreign_keys(1)", file)
+	dsn := file
+	if !strings.HasPrefix(file, "file:") {
+		dsn = "file:" + file
+	}
+	dsn += "?_journal_mode=WAL&cache=shared&_pragma=foreign_keys(1)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
