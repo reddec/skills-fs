@@ -64,10 +64,15 @@ agent has no tools besides `submit_skill`, so it never fetches external sources.
 ## Docker
 
 ```bash
-docker run -d -p 8080:8080 -v skills-fs:/data \
-  -e SKILLSFS_DB=/data/skills.db \
-  ghcr.io/reddec/skills-fs:latest
+docker run -d -p 8080:8080 -v skills-fs:/data ghcr.io/reddec/skills-fs:latest
 ```
+
+That's all: the container runs in `/data`, so the default database (`skills.db`) and its
+WAL files land on the volume — no `SKILLSFS_DB` needed. Drop the volume for an ephemeral
+instance. Every other setting has a working default; for anything reachable beyond
+loopback, append admin auth as container args (the password is flag-only by design):
+`docker run … ghcr.io/reddec/skills-fs:latest --admin-auth=basic --admin-password=…`
+(or `--admin-auth=oidc …`).
 
 ## Build from source
 
