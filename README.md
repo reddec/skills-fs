@@ -5,6 +5,10 @@ directory, per [agentskills.io](https://agentskills.io)) and serves them as a re
 filesystem mountable with [rclone](https://rclone.org/http/). One binary; the
 React admin UI is embedded.
 
+> **Note:** this project is mostly *vibe coded* — written with AI assistance in
+> conversational passes. It works and is tested, but read the code before trusting it
+> with anything sensitive.
+
 ## Configuration
 
 Flags map to `SKILLSFS_*` env vars (e.g. `--bind` → `SKILLSFS_BIND`).
