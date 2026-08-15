@@ -9,6 +9,16 @@ React admin UI is embedded.
 > conversational passes. It works and is tested, but read the code before trusting it
 > with anything sensitive.
 
+## Screenshots
+
+| Skills | Editor | Detail |
+|---|---|---|
+| ![Skills list](docs/screenshots/skills.png) | ![Skill editor](docs/screenshots/skill-editor.png) | ![Skill detail](docs/screenshots/skill-detail.png) |
+
+| Tokens | Mount |
+|---|---|
+| ![Mount tokens](docs/screenshots/tokens.png) | ![Mount setup scripts](docs/screenshots/mount.png) |
+
 ## Configuration
 
 Flags map to `SKILLSFS_*` env vars (e.g. `--bind` → `SKILLSFS_BIND`).
