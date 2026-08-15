@@ -22,9 +22,9 @@ Thumbs.db
 /.cache/
 
 # runtime database
-/*.db
-/*.db-shm
-/*.db-wal
+*.db
+*.db-shm
+*.db-wal
 
 # frontend
 /frontend/node_modules/
