@@ -28,8 +28,8 @@ Flags map to `SKILLSFS_*` env vars (e.g. `--bind` → `SKILLSFS_BIND`).
 | `--bind` / `SKILLSFS_BIND` | `:8080` | Bind address. |
 | `--db` / `SKILLSFS_DB` | `skills.db` | SQLite path (`file::memory:` for ephemeral). |
 | `--admin-auth` / `SKILLSFS_ADMIN_AUTH` | `none` | Admin auth: `none` (local use), `basic`, `oidc`. A warning is logged if `none` is reachable from the network. |
-| `--admin-user` / `SKILLSFS_ADMIN_USER` | `admin` | Basic-auth username. |
-| `--admin-password` / `SKILLSFS_ADMIN_PASSWORD` | | Basic-auth password (required when `--admin-auth basic`). |
+| `--basic.user` / `SKILLSFS_BASIC_USER` | `admin` | Basic-auth username. |
+| `--basic.password` / `SKILLSFS_BASIC_PASSWORD` | | Basic-auth password (required when `--admin-auth basic`). |
 | `--oidc.issuer` / `SKILLSFS_OIDC_ISSUER` | | OIDC issuer URL (admin-auth=oidc). |
 | `--oidc.client-id` / `SKILLSFS_OIDC_CLIENT_ID` | | OIDC client ID. |
 | `--oidc.client-secret` / `SKILLSFS_OIDC_CLIENT_SECRET` | | OIDC client secret. |
@@ -70,7 +70,7 @@ That's all: the container runs in `/data`, so the default database (`skills.db`)
 WAL files land on the volume — no `SKILLSFS_DB` needed. Drop the volume for an ephemeral
 instance. Every other setting has a working default. For anything reachable beyond loopback,
 pass admin auth via env:
-`docker run -d -p 8080:8080 -v skills-fs:/data -e SKILLSFS_ADMIN_AUTH=basic -e SKILLSFS_ADMIN_PASSWORD=… ghcr.io/reddec/skills-fs:latest`
+`docker run -d -p 8080:8080 -v skills-fs:/data -e SKILLSFS_ADMIN_AUTH=basic -e SKILLSFS_BASIC_PASSWORD=… ghcr.io/reddec/skills-fs:latest`
 (or `SKILLSFS_ADMIN_AUTH=oidc` with the `SKILLSFS_OIDC_*` vars). Every flag maps to a
 `SKILLSFS_*` env var.
 

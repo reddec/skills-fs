@@ -23,10 +23,12 @@ type Config struct {
 	Bind  string `name:"bind" help:"Bind address." default:":8080"`
 	Debug bool   `name:"debug" help:"Enable debug logging."`
 	DB    string `name:"db" help:"SQLite database path (\"file::memory:\" for ephemeral)." default:"skills.db"`
+	AdminAuth string `name:"admin-auth" help:"Admin auth: none|basic|oidc." default:"none"`
 
-	AdminAuth     string `name:"admin-auth" help:"Admin auth: none|basic|oidc." default:"none"`
-	AdminUser     string `name:"admin-user" help:"Admin username (basic auth)." default:"admin"`
-	AdminPassword string `name:"admin-password" help:"Admin password (basic auth)."`
+	Basic struct {
+		User     string `name:"user" help:"Admin username (basic auth)." default:"admin"`
+		Password string `name:"password" help:"Admin password (basic auth)."`
+	} `embed:"" prefix:"basic."`
 
 	LLM struct {
 		BaseURL string `name:"base-url" help:"OpenAI-compatible API base URL for skill generation." default:"https://api.deepseek.com/v1"`
@@ -76,8 +78,8 @@ func run(cfg Config) error {
 	handler, err := server.New(ctx, server.Config{
 		DB:            db,
 		AdminAuth:     server.AdminAuth(cfg.AdminAuth),
-		AdminUser:     cfg.AdminUser,
-		AdminPassword: cfg.AdminPassword,
+		AdminUser:     cfg.Basic.User,
+		AdminPassword: cfg.Basic.Password,
 		OIDC: server.OIDCConfig{
 			Issuer:       cfg.OIDC.Issuer,
 			ClientID:     cfg.OIDC.ClientID,
