@@ -26,7 +26,7 @@ type Config struct {
 
 	AdminAuth     string `name:"admin-auth" help:"Admin auth: none|basic|oidc." default:"none"`
 	AdminUser     string `name:"admin-user" help:"Admin username (basic auth)." default:"admin"`
-	AdminPassword string `name:"admin-password" help:"Admin password (basic auth)." env:"-"`
+	AdminPassword string `name:"admin-password" help:"Admin password (basic auth)."`
 
 	LLM struct {
 		BaseURL string `name:"base-url" help:"OpenAI-compatible API base URL for skill generation." default:"https://api.deepseek.com/v1"`
